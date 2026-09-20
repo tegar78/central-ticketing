@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TicketWebController;
+use App\Http\Controllers\TicketExportController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CustomerController;
 
@@ -20,6 +21,11 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // Authenticated Routes
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Ticket Export Routes (must be before /tickets/{id} to avoid conflict)
+    Route::get('/tickets/export/csv', [TicketExportController::class, 'exportCsv'])->name('tickets.export.csv');
+    Route::get('/tickets/export/excel', [TicketExportController::class, 'exportExcel'])->name('tickets.export.excel');
+    Route::get('/tickets/export/pdf', [TicketExportController::class, 'exportPdf'])->name('tickets.export.pdf');
 
     // Ticket routes (store must be before {id} to avoid route conflict)
     Route::post('/tickets', [TicketWebController::class, 'store'])->name('tickets.store');
