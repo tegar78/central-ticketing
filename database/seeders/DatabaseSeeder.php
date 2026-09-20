@@ -1,0 +1,74 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\User;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+
+class DatabaseSeeder extends Seeder
+{
+    use WithoutModelEvents;
+
+    /**
+     * Seed the application's database.
+     */
+    public function run(): void
+    {
+        // Create Users
+        User::create([
+            'name' => 'Admin Ticket Central',
+            'email' => 'admin@central.local',
+            'password' => bcrypt('password'),
+            'role' => 'admin',
+            'phone' => '081234567890',
+            'is_active' => true,
+        ]);
+
+        User::create([
+            'name' => 'Operator Helpdesk',
+            'email' => 'operator@central.local',
+            'password' => bcrypt('password'),
+            'role' => 'operator',
+            'phone' => '081234567891',
+            'is_active' => true,
+        ]);
+
+        User::create([
+            'name' => 'Teknisi Gayuh A',
+            'email' => 'teknisi1@central.local',
+            'password' => bcrypt('password'),
+            'role' => 'technician',
+            'phone' => '081234567892',
+            'is_active' => true,
+        ]);
+
+        User::create([
+            'name' => 'Teknisi Gayuh B',
+            'email' => 'teknisi2@central.local',
+            'password' => bcrypt('password'),
+            'role' => 'technician',
+            'phone' => '081234567893',
+            'is_active' => true,
+        ]);
+
+        // Create Sample Tenants/Billing Instances
+        \App\Models\BillingInstance::create([
+            'tenant_code' => 'BILL-001',
+            'name' => 'PT Gayuh Media Informatika',
+            'domain_url' => 'http://bill-gyh.gayuh.net.id.test',
+            'api_key' => 'key-bill-001-secret-12345',
+            'callback_url' => 'http://bill-gyh.gayuh.net.id.test/help/api_callback',
+            'is_active' => true,
+        ]);
+
+        \App\Models\BillingInstance::create([
+            'tenant_code' => 'BILL-002',
+            'name' => 'Mitra Billing 2',
+            'domain_url' => 'http://bill2.gayuh.net.id.test',
+            'api_key' => 'key-bill-002-secret-67890',
+            'callback_url' => 'http://bill2.gayuh.net.id.test/help/api_callback',
+            'is_active' => true,
+        ]);
+    }
+}
