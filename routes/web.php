@@ -8,6 +8,7 @@ use App\Http\Controllers\TicketWebController;
 use App\Http\Controllers\TicketExportController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\MapController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -37,6 +38,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::post('/customers/sync-billing', [CustomerController::class, 'syncBilling'])->name('customers.syncBilling');
     Route::get('/billing-instances/{id}/customers', [CustomerController::class, 'getBillingCustomers'])->name('billing.customers');
+    Route::post('/customers/{id}/coordinates', [MapController::class, 'updateCoordinates'])->name('customers.updateCoordinates');
+
+    // Maps Location Pelanggan (Synchronized from Billtest)
+    Route::get('/maps', [MapController::class, 'index'])->name('maps.index');
 
     // User Management Routes
     Route::get('/users', [UserController::class, 'index'])->name('users.index');

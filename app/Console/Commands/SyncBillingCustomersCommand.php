@@ -183,6 +183,19 @@ class SyncBillingCustomersCommand extends Command
             return 0;
         }
 
+        if ($this->option('fresh')) {
+            $deleted = Customer::where('billing_node_id', $tenant->id)->delete();
+            $this->info("  → Membersihkan {$deleted} data pelanggan lama untuk node [{$tenant->tenant_code}]");
+        } else {
+            $remoteIds = array_column($upsertData, 'remote_customer_id');
+            $deleted = Customer::where('billing_node_id', $tenant->id)
+                ->whereNotIn('remote_customer_id', $remoteIds)
+                ->delete();
+            if ($deleted > 0) {
+                $this->info("  → Membersihkan {$deleted} data pelanggan lama yang sudah tidak ada di database billing");
+            }
+        }
+
         Customer::upsert(
             $upsertData,
             ['billing_node_id', 'remote_customer_id'],

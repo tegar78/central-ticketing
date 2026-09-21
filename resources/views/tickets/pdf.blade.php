@@ -168,7 +168,7 @@
                 <th style="width: 25px;" class="text-center">No</th>
                 <th style="width: 70px;">Tanggal</th>
                 <th style="width: 95px;">No Tiket</th>
-                <th style="width: 100px;">Billing Mitra</th>
+                <th style="width: 100px;">Billing Gayuh</th>
                 <th style="width: 80px;">No Layanan</th>
                 <th style="width: 110px;">Pelanggan</th>
                 <th style="width: 80px;">No WA</th>

@@ -13,7 +13,6 @@ class TestTicketSeeder extends Seeder
     public function run(): void
     {
         $tenant1 = BillingInstance::where('tenant_code', 'BILL-001')->first();
-        $tenant2 = BillingInstance::where('tenant_code', 'BILL-002')->first();
 
         $techA = User::where('email', 'teknisi1@central.local')->first();
         $techB = User::where('email', 'teknisi2@central.local')->first();
@@ -43,27 +42,5 @@ class TestTicketSeeder extends Seeder
             'remark' => 'Tiket dibuat via PT Gayuh Media Informatika',
         ]);
 
-        $tkt2 = Ticket::create([
-            'ticket_number' => 'TKT-20260814-0002',
-            'billing_instance_id' => $tenant2->id,
-            'remote_ticket_id' => '202',
-            'no_services' => '99887766',
-            'customer_name' => 'Siti Rahma',
-            'customer_phone' => '081377665544',
-            'customer_address' => 'Jl. Sudirman No. 45, Bandung',
-            'category_name' => 'Koneksi Lambat',
-            'problem_description' => 'Internet lambat dan sering RTO.',
-            'status' => 'process',
-            'assigned_technician_id' => $techB->id,
-            'created_by_name' => 'Operator Billing 2',
-            'created_by_role' => 'Operator',
-        ]);
-
-        TicketTimeline::create([
-            'ticket_id' => $tkt2->id,
-            'user_id' => null,
-            'status' => 'process',
-            'remark' => 'Tiket dibuat via Mitra Billing 2',
-        ]);
     }
 }

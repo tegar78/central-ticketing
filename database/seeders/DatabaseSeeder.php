@@ -67,18 +67,6 @@ class DatabaseSeeder extends Seeder
             'db_password' => '',
         ]);
 
-        \App\Models\BillingInstance::create([
-            'tenant_code' => 'BILL-002',
-            'name' => 'Mitra Billing 2',
-            'domain_url' => 'http://bill2.gayuh.net.id.test',
-            'api_key' => 'key-bill-002-secret-67890',
-            'callback_url' => 'http://bill2.gayuh.net.id.test/help/api_callback',
-            'is_active' => true,
-            'db_host' => '127.0.0.2',
-            'db_port' => '3306',
-            'db_database' => 'bill2-gyh',
-            'db_username' => 'root',
-            'db_password' => '',
-        ]);
+
     }
 }
