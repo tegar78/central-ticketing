@@ -17,16 +17,23 @@
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">
-            <form action="{{ route('customers.syncBilling') }}" method="POST" class="flex-1 sm:flex-none">
+            <form action="{{ route('customers.syncBilling') }}" method="POST" class="flex flex-wrap sm:flex-nowrap items-center gap-2 flex-1 sm:flex-none">
                 @csrf
-                <input type="hidden" name="tenant_code" value="BILL-001">
+                <select name="tenant_code" class="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400/30 min-h-[44px]">
+                    <option value="all">Semua Server Billing</option>
+                    @foreach($tenants as $t)
+                        <option value="{{ $t->tenant_code }}" {{ $t->tenant_code === 'BILL-001' ? 'selected' : '' }}>
+                            [{{ $t->tenant_code }}] {{ $t->name }}
+                        </option>
+                    @endforeach
+                </select>
                 <button type="submit" 
-                        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/25 border border-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 min-h-[44px]">
-                    <i class="fa-solid fa-rotate"></i> Sync Bill-GYH
+                        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/25 border border-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 min-h-[44px]">
+                    <i class="fa-solid fa-rotate"></i> Sync Data
                 </button>
             </form>
             <a href="{{ route('dashboard') }}" 
-               class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800/80 dark:hover:bg-slate-700 dark:text-slate-300 text-xs font-medium rounded-xl border border-slate-300 dark:border-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-slate-400 min-h-[44px]">
+               class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800/80 dark:hover:bg-slate-700 dark:text-slate-300 text-xs font-medium rounded-xl border border-slate-300 dark:border-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-slate-400 min-h-[44px]">
                 <i class="fa-solid fa-arrow-left"></i> Dashboard
             </a>
         </div>
@@ -154,12 +161,61 @@
 
     <!-- Customer Directory Container -->
     <div class="bg-white/80 dark:bg-slate-900/50 border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-xl overflow-hidden transition-colors">
-        <div class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between">
-            <h3 class="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
-                <i class="fa-solid fa-table-list text-blue-600 dark:text-blue-400"></i>
-                <span>Direktori Pelanggan Terpusat</span>
-            </h3>
-            <span class="text-xs text-slate-500 dark:text-slate-400">Menampilkan {{ $customers->count() }} dari {{ $customers->total() }} pelanggan</span>
+        <div class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+                <h3 class="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
+                    <i class="fa-solid fa-table-list text-blue-600 dark:text-blue-400"></i>
+                    <span>Direktori Pelanggan Terpusat</span>
+                </h3>
+                <span class="text-xs text-slate-500 dark:text-slate-400">Menampilkan {{ $customers->count() }} dari {{ $customers->total() }} pelanggan</span>
+            </div>
+
+            <!-- Quick Sorting Controls (Accessible on Mobile & Desktop) -->
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:inline">Urutan:</span>
+                
+                <!-- Sort No Layanan Group -->
+                <div class="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-950/70 p-1 border border-slate-200 dark:border-white/10">
+                    <span class="text-[11px] font-medium text-slate-600 dark:text-slate-300 px-2 flex items-center gap-1">
+                        <i class="fa-solid fa-hashtag text-[10px] text-blue-500"></i> Layanan:
+                    </span>
+                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'no_services', 'sort_dir' => 'asc']) }}"
+                       class="px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all flex items-center gap-1 {{ request('sort_by') === 'no_services' && request('sort_dir', 'asc') === 'asc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800' }}"
+                       title="No Layanan Ascending (0-9)">
+                        <i class="fa-solid fa-arrow-up-1-9"></i> Asc
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'no_services', 'sort_dir' => 'desc']) }}"
+                       class="px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all flex items-center gap-1 {{ request('sort_by') === 'no_services' && request('sort_dir') === 'desc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800' }}"
+                       title="No Layanan Descending (9-0)">
+                        <i class="fa-solid fa-arrow-down-9-1"></i> Desc
+                    </a>
+                </div>
+
+                <!-- Sort Nama Pelanggan Group -->
+                <div class="inline-flex items-center rounded-xl bg-slate-100 dark:bg-slate-950/70 p-1 border border-slate-200 dark:border-white/10">
+                    <span class="text-[11px] font-medium text-slate-600 dark:text-slate-300 px-2 flex items-center gap-1">
+                        <i class="fa-solid fa-user text-[10px] text-indigo-500"></i> Nama:
+                    </span>
+                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'name', 'sort_dir' => 'asc']) }}"
+                       class="px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all flex items-center gap-1 {{ request('sort_by') === 'name' && request('sort_dir', 'asc') === 'asc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800' }}"
+                       title="Nama Ascending (A-Z)">
+                        <i class="fa-solid fa-arrow-up-a-z"></i> A-Z
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'name', 'sort_dir' => 'desc']) }}"
+                       class="px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all flex items-center gap-1 {{ request('sort_by') === 'name' && request('sort_dir') === 'desc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800' }}"
+                       title="Nama Descending (Z-A)">
+                        <i class="fa-solid fa-arrow-down-z-a"></i> Z-A
+                    </a>
+                </div>
+
+                @if(request('sort_by'))
+                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => null, 'sort_dir' => null]) }}"
+                       class="px-2 py-1 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 dark:bg-slate-800/80 dark:hover:bg-rose-500/20 dark:text-slate-400 dark:hover:text-rose-300 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-white/10 transition-colors flex items-center gap-1"
+                       title="Reset Urutan ke Default">
+                        <i class="fa-solid fa-rotate-left text-[10px]"></i> Reset
+                    </a>
+                @endif
+            </div>
         </div>
 
         <!-- Desktop Table View (Visible on md screens and up) -->
@@ -169,8 +225,40 @@
                     <tr>
                         <th class="px-4 py-3.5 text-center w-12">No</th>
                         <th class="px-4 py-3.5">Identitas Billing Origin</th>
-                        <th class="px-4 py-3.5">No Layanan</th>
-                        <th class="px-4 py-3.5">Nama Pelanggan</th>
+                        <th class="px-4 py-3.5">
+                            <div class="inline-flex items-center gap-1.5">
+                                <span>No Layanan</span>
+                                <div class="inline-flex items-center rounded-md bg-slate-200/60 dark:bg-slate-800/80 p-0.5 border border-slate-300/50 dark:border-white/10">
+                                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'no_services', 'sort_dir' => 'asc']) }}"
+                                       class="w-4 h-4 flex items-center justify-center rounded {{ request('sort_by') === 'no_services' && request('sort_dir', 'asc') === 'asc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white' }}"
+                                       title="Urutkan No Layanan Ascending (0-9)">
+                                        <i class="fa-solid fa-arrow-up-1-9 text-[9px]"></i>
+                                    </a>
+                                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'no_services', 'sort_dir' => 'desc']) }}"
+                                       class="w-4 h-4 flex items-center justify-center rounded {{ request('sort_by') === 'no_services' && request('sort_dir') === 'desc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white' }}"
+                                       title="Urutkan No Layanan Descending (9-0)">
+                                        <i class="fa-solid fa-arrow-down-9-1 text-[9px]"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </th>
+                        <th class="px-4 py-3.5">
+                            <div class="inline-flex items-center gap-1.5">
+                                <span>Nama Pelanggan</span>
+                                <div class="inline-flex items-center rounded-md bg-slate-200/60 dark:bg-slate-800/80 p-0.5 border border-slate-300/50 dark:border-white/10">
+                                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'name', 'sort_dir' => 'asc']) }}"
+                                       class="w-4 h-4 flex items-center justify-center rounded {{ request('sort_by') === 'name' && request('sort_dir', 'asc') === 'asc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white' }}"
+                                       title="Urutkan Nama Pelanggan Ascending (A-Z)">
+                                        <i class="fa-solid fa-arrow-up-a-z text-[9px]"></i>
+                                    </a>
+                                    <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'name', 'sort_dir' => 'desc']) }}"
+                                       class="w-4 h-4 flex items-center justify-center rounded {{ request('sort_by') === 'name' && request('sort_dir') === 'desc' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white' }}"
+                                       title="Urutkan Nama Pelanggan Descending (Z-A)">
+                                        <i class="fa-solid fa-arrow-down-z-a text-[9px]"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </th>
                         <th class="px-4 py-3.5">Kontak & Alamat</th>
                         <th class="px-4 py-3.5">Paket & Tagihan</th>
                         <th class="px-4 py-3.5">Titik ODP</th>

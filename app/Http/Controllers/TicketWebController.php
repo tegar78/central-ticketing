@@ -64,7 +64,7 @@ class TicketWebController extends Controller
         // Webhook callback to CI Billing Instance (e.g. bill-gyh.gayuh.net.id)
         if ($ticket->billingInstance && !empty($ticket->billingInstance->callback_url)) {
             try {
-                \Illuminate\Support\Facades\Http::timeout(3)->post($ticket->billingInstance->callback_url, [
+                $response = \Illuminate\Support\Facades\Http::timeout(5)->post($ticket->billingInstance->callback_url, [
                     'event' => 'ticket_created',
                     'ticket_number' => $ticket->ticket_number,
                     'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
@@ -76,7 +76,16 @@ class TicketWebController extends Controller
                     'problem_description' => $ticket->problem_description,
                     'created_by_name' => $user->name,
                     'created_by_role' => $user->role,
+                    'updated_by_name' => $user->name,
+                    'updated_by_role' => $user->role,
                 ]);
+
+                if ($response->successful()) {
+                    $resData = $response->json();
+                    if (!empty($resData['help_id'])) {
+                        $ticket->update(['remote_ticket_id' => $resData['help_id']]);
+                    }
+                }
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::warning("New ticket webhook callback failed for {$ticket->billingInstance->name}: " . $e->getMessage());
             }
@@ -85,7 +94,13 @@ class TicketWebController extends Controller
         return back()->with('success', "Tiket {$ticketNumber} berhasil dibuat dan disinkronkan ke billing.");
     }
 
-    public function show($id)
+    /**
+     * Display the specified ticket details.
+     *
+     * @param string|int $id
+     * @return \Illuminate\View\View
+     */
+    public function show(string|int $id)
     {
         $user = Auth::user();
 
@@ -102,7 +117,14 @@ class TicketWebController extends Controller
         return view('tickets.show', compact('ticket', 'user', 'technicians'));
     }
 
-    public function assignTechnician(Request $request, $id)
+    /**
+     * Assign a technician to the specified ticket.
+     *
+     * @param Request $request
+     * @param string|int $id
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function assignTechnician(Request $request, string|int $id)
     {
         $user = Auth::user();
 
@@ -121,17 +143,44 @@ class TicketWebController extends Controller
             'assigned_technician_id' => $technician->id,
         ]);
 
+        $remark = "Ditugaskan ke teknisi: {$technician->name} oleh {$user->name} ({$user->role})";
+
         TicketTimeline::create([
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'status' => $ticket->status,
-            'remark' => "Ditugaskan ke teknisi: {$technician->name} oleh {$user->name} ({$user->role})",
+            'remark' => $remark,
         ]);
+
+        // Webhook callback to CI Billing Instance
+        if ($ticket->billingInstance && !empty($ticket->billingInstance->callback_url)) {
+            try {
+                \Illuminate\Support\Facades\Http::timeout(5)->post($ticket->billingInstance->callback_url, [
+                    'event' => 'technician_assigned',
+                    'ticket_number' => $ticket->ticket_number,
+                    'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
+                    'status' => $ticket->status,
+                    'remark' => $remark,
+                    'technician_name' => $technician->name,
+                    'updated_by_name' => $user->name,
+                    'updated_by_role' => $user->role,
+                ]);
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Assign technician callback failed: " . $e->getMessage());
+            }
+        }
 
         return back()->with('success', "Tiket berhasil ditugaskan ke Teknisi {$technician->name}.");
     }
 
-    public function updateStatus(Request $request, $id)
+    /**
+     * Update ticket status and trigger webhook callback.
+     *
+     * @param Request $request
+     * @param string|int $id
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateStatus(Request $request, string|int $id)
     {
         $user = Auth::user();
         $ticket = Ticket::findOrFail($id);
@@ -159,11 +208,15 @@ class TicketWebController extends Controller
         // Webhook callback to CI Billing Instance
         if ($ticket->billingInstance && !empty($ticket->billingInstance->callback_url)) {
             try {
-                \Illuminate\Support\Facades\Http::timeout(3)->post($ticket->billingInstance->callback_url, [
+                \Illuminate\Support\Facades\Http::timeout(5)->post($ticket->billingInstance->callback_url, [
+                    'event' => 'status_updated',
+                    'ticket_number' => $ticket->ticket_number,
                     'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
                     'status' => $validated['status'],
                     'remark' => $validated['remark'],
                     'technician_name' => $user->name,
+                    'updated_by_name' => $user->name,
+                    'updated_by_role' => $user->role,
                 ]);
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::warning("Callback failed: " . $e->getMessage());

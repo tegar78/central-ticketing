@@ -11,16 +11,16 @@ use Illuminate\Support\Carbon;
 
 class SyncBillingCustomersCommand extends Command
 {
-    protected $signature = 'sync:billing-customers {tenant_code? : Tenant code (e.g. BILL-001)} {--all : Sync all active billing instances}';
+    protected $signature = 'sync:billing-customers {tenant_code? : Tenant code (e.g. BILL-001)} {--all : Sync all active billing instances} {--fresh : Delete existing customers before syncing}';
 
-    protected $description = 'Sinkronisasi data pelanggan langsung dari database MySQL billing CI3 (bill-gyh.gayuh.net.id) ke Central Ticket System';
+    protected $description = 'Sinkronisasi data pelanggan dari server billing CodeIgniter 3 via RESTful API ke Central Ticket System';
 
     public function handle()
     {
         $tenantCode = $this->argument('tenant_code');
 
         if (!$tenantCode && !$this->option('all')) {
-            $tenantCode = 'BILL-001'; // Default: bill-gyh.gayuh.net.id
+            $tenantCode = 'BILL-001'; // Default: BILL-001
         }
 
         $query = BillingInstance::where('is_active', true);
@@ -41,10 +41,17 @@ class SyncBillingCustomersCommand extends Command
             $this->info("");
             $this->info("══════════════════════════════════════════════════");
             $this->info("  Billing Instance: [{$tenant->tenant_code}] {$tenant->name}");
-            $this->info("  Domain: {$tenant->domain_url}");
+            $this->info("  Domain URL: {$tenant->domain_url}");
             $this->info("══════════════════════════════════════════════════");
 
-            $syncedCount = $this->syncFromDirectDatabase($tenant);
+            $syncedCount = $this->syncViaRestApi($tenant);
+
+            // If REST API didn't return data and direct DB is configured, fallback
+            if ($syncedCount === 0 && !empty($tenant->db_database)) {
+                $this->warn("  ⚠ REST API tidak merespon, mencoba fallback direct database...");
+                $syncedCount = $this->syncFromDirectDatabase($tenant);
+            }
+
             $totalSynced += $syncedCount;
         }
 
@@ -57,23 +64,155 @@ class SyncBillingCustomersCommand extends Command
     }
 
     /**
-     * Sync customers directly from CI3 MySQL database (bill2-gyh)
+     * Sync customers via RESTful API (HTTP GET/POST)
      */
-    private function syncFromDirectDatabase(BillingInstance $tenant): int
+    private function syncViaRestApi(BillingInstance $tenant): int
     {
-        try {
-            // Test connection to billing_ci3 database
-            $testConn = DB::connection('billing_ci3')->getPdo();
-            $this->info("  ✓ Koneksi database billing_ci3 berhasil");
-        } catch (\Exception $e) {
-            $this->error("  ✗ Gagal koneksi ke database billing_ci3: " . $e->getMessage());
+        if (empty($tenant->domain_url)) {
+            $this->warn("  ⚠ Domain URL belum diisi untuk [{$tenant->tenant_code}].");
             return 0;
         }
 
-        // Query the CI3 customer table with ODP join
+        $domainUrl = rtrim($tenant->domain_url, '/');
+        $this->info("  → Menghubungi REST API server billing [{$domainUrl}]...");
+
+        // 1. Endpoint Utama: CI3 Controller Central.php (/central/customers)
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(15)
+                ->withHeaders([
+                    'X-API-Key' => $tenant->api_key,
+                    'Accept'    => 'application/json',
+                ])
+                ->get("{$domainUrl}/central/customers");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $items = $data['data'] ?? (is_array($data) && array_is_list($data) ? $data : null);
+
+                if (!empty($items) && is_array($items)) {
+                    $this->info("  ✓ Ditemukan " . count($items) . " pelanggan dari REST API /central/customers");
+                    return $this->ingestCustomerArray($tenant, $items);
+                }
+            }
+        } catch (\Exception $e) {
+            $this->line("  ℹ Info: /central/customers tidak merespon: " . $e->getMessage());
+        }
+
+        // 2. Endpoint CI3 /api/customers (Format REST Server)
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(15)
+                ->withHeaders([
+                    'X-API-Key' => $tenant->api_key,
+                    'Accept'    => 'application/json',
+                ])
+                ->get("{$domainUrl}/api/customers");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $items = $data['data'] ?? (is_array($data) && array_is_list($data) ? $data : null);
+
+                if (!empty($items) && is_array($items)) {
+                    $this->info("  ✓ Ditemukan " . count($items) . " pelanggan dari REST API /api/customers");
+                    return $this->ingestCustomerArray($tenant, $items);
+                }
+            }
+        } catch (\Exception $e) {
+            $this->line("  ℹ Info: /api/customers tidak dapat dihubungi: " . $e->getMessage());
+        }
+
+        // 3. Endpoint CI3 /sync_central/customers (CI3 push batch ke Central Hub)
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(15)
+                ->withHeaders([
+                    'X-API-Key' => $tenant->api_key,
+                    'Accept'    => 'application/json',
+                ])
+                ->get("{$domainUrl}/sync_central/customers");
+
+            if ($response->successful()) {
+                $json = $response->json();
+                $processed = $json['total_processed'] ?? $json['processed_count'] ?? 0;
+                if ($processed > 0) {
+                    $this->info("  ✓ REST API Sync sukses: {$processed} pelanggan disinkronkan via /sync_central/customers");
+                    return (int) $processed;
+                }
+            }
+        } catch (\Exception $e) {
+            $this->line("  ℹ Info: /sync_central/customers tidak dapat dihubungi: " . $e->getMessage());
+        }
+
+        return 0;
+    }
+
+    /**
+     * Ingest customer array received via REST API
+     */
+    private function ingestCustomerArray(BillingInstance $tenant, array $items): int
+    {
+        $now = Carbon::now();
+        $upsertData = [];
+
+        foreach ($items as $cust) {
+            $remoteId = $cust['remote_customer_id'] ?? $cust['customer_id'] ?? $cust['id'] ?? null;
+            $noServices = $cust['no_services'] ?? $cust['no_layanan'] ?? null;
+            $name = $cust['name'] ?? $cust['nama'] ?? null;
+
+            if (!$remoteId || !$noServices || !$name) {
+                continue;
+            }
+
+            $upsertData[] = [
+                'billing_node_id'    => $tenant->id,
+                'remote_customer_id' => (int) $remoteId,
+                'no_services'        => (string) $noServices,
+                'name'               => (string) $name,
+                'phone'              => $cust['phone'] ?? $cust['no_wa'] ?? null,
+                'address'            => isset($cust['address']) ? trim($cust['address']) : null,
+                'odp_name'           => $cust['odp_name'] ?? $cust['odp_code'] ?? null,
+                'latitude'           => isset($cust['latitude']) ? (string) $cust['latitude'] : null,
+                'longitude'          => isset($cust['longitude']) ? (string) $cust['longitude'] : null,
+                'package_name'       => $cust['package_name'] ?? $cust['user_profile'] ?? null,
+                'monthly_fee'        => isset($cust['monthly_fee']) ? (float) $cust['monthly_fee'] : (isset($cust['cust_amount']) ? (float) $cust['cust_amount'] : null),
+                'status'             => $this->mapStatus($cust['status'] ?? $cust['c_status'] ?? 'active'),
+                'created_at'         => $now,
+                'updated_at'         => $now,
+            ];
+        }
+
+        if (empty($upsertData)) {
+            return 0;
+        }
+
+        Customer::upsert(
+            $upsertData,
+            ['billing_node_id', 'remote_customer_id'],
+            ['no_services', 'name', 'phone', 'address', 'odp_name', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
+        );
+
+        $this->info("  ✓ Berhasil menyimpan " . count($upsertData) . " pelanggan ke database Central.");
+        return count($upsertData);
+    }
+
+    /**
+     * Sync customers directly from CI3 MySQL database (Fallback method)
+     */
+    private function syncFromDirectDatabase(BillingInstance $tenant): int
+    {
+        $dbName = $tenant->db_database ?: env('BILLING_CI3_DB_DATABASE', 'bill3-gyh');
+
+        try {
+            /** @var \Illuminate\Database\Connection $conn */
+            $conn = $tenant->getDatabaseConnection() ?: DB::connection('billing_ci3');
+            $conn->getPdo();
+            $this->info("  ✓ Fallback: Koneksi database [{$dbName}] berhasil");
+        } catch (\Exception $e) {
+            $this->error("  ✗ Gagal koneksi ke database [{$dbName}]: " . $e->getMessage());
+            return 0;
+        }
+
         $this->info("  → Mengambil data pelanggan dari tabel `customer`...");
 
-        $remoteCustomers = DB::connection('billing_ci3')
+        $remoteCustomers = $conn
             ->table('customer')
             ->leftJoin('m_odp', 'customer.id_odp', '=', 'm_odp.id_odp')
             ->select([
@@ -100,6 +239,19 @@ class SyncBillingCustomersCommand extends Command
             return 0;
         }
 
+        if ($this->option('fresh')) {
+            $deleted = Customer::where('billing_node_id', $tenant->id)->delete();
+            $this->info("  → Membersihkan {$deleted} data pelanggan lama untuk node [{$tenant->tenant_code}]");
+        } else {
+            $remoteIds = $remoteCustomers->pluck('customer_id')->map(fn($id) => (int)$id)->toArray();
+            $deleted = Customer::where('billing_node_id', $tenant->id)
+                ->whereNotIn('remote_customer_id', $remoteIds)
+                ->delete();
+            if ($deleted > 0) {
+                $this->info("  → Membersihkan {$deleted} data pelanggan lama yang sudah tidak ada di database billing");
+            }
+        }
+
         $now = Carbon::now();
         $batchSize = 500;
         $batches = $remoteCustomers->chunk($batchSize);
@@ -113,7 +265,6 @@ class SyncBillingCustomersCommand extends Command
             $upsertData = [];
 
             foreach ($batch as $cust) {
-                // Map CI3 status to Central status
                 $status = $this->mapStatus($cust->c_status);
 
                 $upsertData[] = [

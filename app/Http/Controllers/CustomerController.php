@@ -25,7 +25,6 @@ class CustomerController extends Controller
         $ticketCustomers = Ticket::select(
                 'billing_instance_id',
                 'no_services',
-                DB::raw('MAX(id) as remote_customer_id'),
                 DB::raw('MAX(customer_name) as name'),
                 DB::raw('MAX(customer_phone) as phone'),
                 DB::raw('MAX(customer_address) as address')
@@ -36,19 +35,53 @@ class CustomerController extends Controller
             ->get();
 
         foreach ($ticketCustomers as $tc) {
-            Customer::firstOrCreate(
-                [
-                    'billing_node_id' => $tc->billing_instance_id,
-                    'no_services' => $tc->no_services,
-                ],
-                [
-                    'remote_customer_id' => $tc->remote_customer_id ?? rand(1000, 9999),
-                    'name' => $tc->name ?? 'Pelanggan Billing',
-                    'phone' => $tc->phone,
-                    'address' => $tc->address,
-                    'status' => 'active'
-                ]
-            );
+            $customerExists = Customer::where('billing_node_id', $tc->billing_instance_id)
+                ->where('no_services', $tc->no_services)
+                ->exists();
+
+            if (!$customerExists) {
+                $remoteCustomerId = null;
+
+                // Try fetching actual customer_id from CI3 database using dynamic connection
+                try {
+                    $inst = BillingInstance::find($tc->billing_instance_id);
+                    $dbConn = $inst ? ($inst->getDatabaseConnection() ?: ($inst->tenant_code === 'BILL-001' ? DB::connection('billing_ci3') : null)) : null;
+
+                    if ($dbConn) {
+                        $ci3Cust = $dbConn->table('customer')
+                            ->where('no_services', $tc->no_services)
+                            ->select('customer_id')
+                            ->first();
+
+                        if ($ci3Cust && !empty($ci3Cust->customer_id)) {
+                            $idTaken = Customer::where('billing_node_id', $tc->billing_instance_id)
+                                ->where('remote_customer_id', $ci3Cust->customer_id)
+                                ->exists();
+
+                            if (!$idTaken) {
+                                $remoteCustomerId = $ci3Cust->customer_id;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Fallback to generated ID
+                }
+
+                if (!$remoteCustomerId) {
+                    $maxRemoteId = (int) Customer::where('billing_node_id', $tc->billing_instance_id)->max('remote_customer_id');
+                    $remoteCustomerId = max($maxRemoteId + 1, 900001);
+                }
+
+                Customer::create([
+                    'billing_node_id'    => $tc->billing_instance_id,
+                    'remote_customer_id' => $remoteCustomerId,
+                    'no_services'        => $tc->no_services,
+                    'name'               => $tc->name ?? 'Pelanggan Billing',
+                    'phone'              => $tc->phone,
+                    'address'            => $tc->address,
+                    'status'             => 'active',
+                ]);
+            }
         }
 
         // Base query with relationships
@@ -83,7 +116,17 @@ class CustomerController extends Controller
             $query->where('odp_name', $request->odp_name);
         }
 
-        $customers = $query->latest('updated_at')->paginate(25)->withQueryString();
+        // Sorting by no_services or name (asc / desc)
+        $sortBy = $request->get('sort_by');
+        $sortDir = strtolower($request->get('sort_dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        if (in_array($sortBy, ['no_services', 'name'])) {
+            $query->orderBy($sortBy, $sortDir);
+        } else {
+            $query->latest('updated_at');
+        }
+
+        $customers = $query->paginate(25)->withQueryString();
 
         // Overall Stats
         $totalCustomers = Customer::count();
@@ -113,8 +156,11 @@ class CustomerController extends Controller
 
     /**
      * Get customers for modal dropdown from remote Billing Instance API or local database fallback
+     *
+     * @param string|int $id
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function getBillingCustomers($id)
+    public function getBillingCustomers(string|int $id)
     {
         $customers = [];
         $source = 'local_db';
@@ -130,60 +176,86 @@ class CustomerController extends Controller
                     'tenant_code' => $billingInstance->tenant_code,
                 ];
 
-                // For BILL-001 (bill-gyh.gayuh.net.id): Direct database connection to CI3
-                if ($billingInstance->tenant_code === 'BILL-001') {
-                    try {
-                        $ci3Customers = DB::connection('billing_ci3')
-                            ->table('customer')
-                            ->leftJoin('m_odp', 'customer.id_odp', '=', 'm_odp.id_odp')
-                            ->select([
-                                'customer.customer_id',
-                                'customer.name',
-                                'customer.no_services',
-                                'customer.address',
-                                'customer.no_wa',
-                                'customer.c_status',
-                                'customer.user_profile',
-                                'customer.cust_amount',
-                                'm_odp.code_odp as odp_code',
-                            ])
-                            ->get();
+                // 1. Prioritize local database (populated via RESTful API sync) for blazing fast response
+                $localCustomers = Customer::where('billing_node_id', $billingInstance->id)->get();
 
-                        foreach ($ci3Customers as $cust) {
-                            $customers[] = [
-                                'no_services'      => $cust->no_services,
-                                'customer_name'     => $cust->name,
-                                'customer_phone'    => $cust->no_wa,
-                                'customer_address'  => trim($cust->address ?? ''),
-                                'billing_instance_id' => $billingInstance->id,
-                                'status'            => ucfirst($cust->c_status ?? 'Aktif'),
-                                'package_name'      => $cust->user_profile ?? 'Regular',
-                                'odp_name'          => $cust->odp_code,
-                            ];
+                if ($localCustomers->isNotEmpty()) {
+                    foreach ($localCustomers as $cust) {
+                        $customers[] = [
+                            'no_services'         => $cust->no_services,
+                            'customer_name'       => $cust->name,
+                            'customer_phone'      => $cust->phone,
+                            'customer_address'    => trim($cust->address ?? ''),
+                            'billing_instance_id' => $billingInstance->id,
+                            'status'              => ucfirst($cust->status ?? 'Active'),
+                            'package_name'        => $cust->package_name ?? 'Regular',
+                            'odp_name'            => $cust->odp_name,
+                        ];
+                    }
+                    $source = 'local_synced_api';
+                }
+
+                // 2. If local database is empty, query CI3 RESTful API directly (/central/customers or /api/customers)
+                if (empty($customers) && !empty($billingInstance->domain_url)) {
+                    $domainUrl = rtrim($billingInstance->domain_url, '/');
+                    foreach (["{$domainUrl}/central/customers", "{$domainUrl}/api/customers"] as $apiUrl) {
+                        try {
+                            $response = Http::timeout(3)
+                                ->withHeaders([
+                                    'X-API-Key' => $billingInstance->api_key,
+                                    'Accept'    => 'application/json',
+                                ])
+                                ->get($apiUrl);
+
+                            if ($response->successful() && isset($response->json()['data'])) {
+                                $customers = $response->json()['data'];
+                                $source = 'remote_rest_api';
+                                break;
+                            }
+                        } catch (\Exception $e) {
+                            Log::info("Remote billing REST API customer fetch timeout/failed ({$apiUrl}): " . $e->getMessage());
                         }
-                        $source = 'direct_db_ci3';
-                    } catch (\Exception $e) {
-                        Log::warning("Direct DB connection to billing_ci3 failed: " . $e->getMessage());
                     }
                 }
 
-                // Fallback: Try remote API if direct DB didn't work
-                if (empty($customers) && !empty($billingInstance->domain_url)) {
-                    try {
-                        $apiUrl = rtrim($billingInstance->domain_url, '/') . '/api/customers';
-                        $response = Http::timeout(2)
-                            ->withHeaders([
-                                'X-API-Key' => $billingInstance->api_key,
-                                'Accept' => 'application/json',
-                            ])
-                            ->get($apiUrl);
+                // 3. Fallback: Direct DB connection if configured
+                if (empty($customers)) {
+                    $conn = $billingInstance->getDatabaseConnection() 
+                        ?: ($billingInstance->tenant_code === 'BILL-001' ? DB::connection('billing_ci3') : null);
 
-                        if ($response->successful() && isset($response->json()['data'])) {
-                            $customers = $response->json()['data'];
-                            $source = 'remote_api';
+                    if ($conn) {
+                        try {
+                            $ci3Customers = $conn->table('customer')
+                                ->leftJoin('m_odp', 'customer.id_odp', '=', 'm_odp.id_odp')
+                                ->select([
+                                    'customer.customer_id',
+                                    'customer.name',
+                                    'customer.no_services',
+                                    'customer.address',
+                                    'customer.no_wa',
+                                    'customer.c_status',
+                                    'customer.user_profile',
+                                    'customer.cust_amount',
+                                    'm_odp.code_odp as odp_code',
+                                ])
+                                ->get();
+
+                            foreach ($ci3Customers as $cust) {
+                                $customers[] = [
+                                    'no_services'         => $cust->no_services,
+                                    'customer_name'       => $cust->name,
+                                    'customer_phone'      => $cust->no_wa,
+                                    'customer_address'    => trim($cust->address ?? ''),
+                                    'billing_instance_id' => $billingInstance->id,
+                                    'status'              => ucfirst($cust->c_status ?? 'Aktif'),
+                                    'package_name'        => $cust->user_profile ?? 'Regular',
+                                    'odp_name'            => $cust->odp_code,
+                                ];
+                            }
+                            $source = 'direct_db_ci3';
+                        } catch (\Exception $e) {
+                            Log::warning("Direct DB connection to {$billingInstance->name} failed: " . $e->getMessage());
                         }
-                    } catch (\Exception $e) {
-                        Log::info("Remote billing customer fetch timeout/failed for {$billingInstance->name}: " . $e->getMessage());
                     }
                 }
             }
@@ -252,16 +324,25 @@ class CustomerController extends Controller
     }
 
     /**
-     * Trigger manual sync of billing instance customer data (e.g. bill-gyh.gayuh.net.id)
+     * Trigger manual sync of billing instance customer data
      */
     public function syncBilling(Request $request)
     {
-        $tenantCode = $request->input('tenant_code', 'BILL-001');
+        $tenantCode = $request->input('tenant_code');
+
+        if ($tenantCode === 'all') {
+            \Illuminate\Support\Facades\Artisan::call('sync:billing-customers', [
+                '--all' => true
+            ]);
+            return back()->with('success', 'Sinkronisasi data pelanggan dari semua server billing aktif berhasil dilaksanakan.');
+        }
+
+        $tenantCode = $tenantCode ?: 'BILL-001';
 
         \Illuminate\Support\Facades\Artisan::call('sync:billing-customers', [
             'tenant_code' => $tenantCode
         ]);
 
-        return back()->with('success', 'Sinkronisasi data pelanggan dari server billing ' . $tenantCode . ' (bill-gyh.gayuh.net.id) berhasil dilaksanakan.');
+        return back()->with('success', 'Sinkronisasi data pelanggan dari server billing ' . $tenantCode . ' berhasil dilaksanakan.');
     }
 }

@@ -56,10 +56,15 @@ class DatabaseSeeder extends Seeder
         \App\Models\BillingInstance::create([
             'tenant_code' => 'BILL-001',
             'name' => 'PT Gayuh Media Informatika',
-            'domain_url' => 'http://bill-gyh.gayuh.net.id.test',
+            'domain_url' => 'http://bill-testing.gayuh.net.id.test',
             'api_key' => 'key-bill-001-secret-12345',
-            'callback_url' => 'http://bill-gyh.gayuh.net.id.test/help/api_callback',
+            'callback_url' => 'http://bill-testing.gayuh.net.id.test/help/api_callback',
             'is_active' => true,
+            'db_host' => '127.0.0.2',
+            'db_port' => '3306',
+            'db_database' => 'bill3-gyh',
+            'db_username' => 'root',
+            'db_password' => '',
         ]);
 
         \App\Models\BillingInstance::create([
@@ -69,6 +74,11 @@ class DatabaseSeeder extends Seeder
             'api_key' => 'key-bill-002-secret-67890',
             'callback_url' => 'http://bill2.gayuh.net.id.test/help/api_callback',
             'is_active' => true,
+            'db_host' => '127.0.0.2',
+            'db_port' => '3306',
+            'db_database' => 'bill2-gyh',
+            'db_username' => 'root',
+            'db_password' => '',
         ]);
     }
 }

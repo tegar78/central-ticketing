@@ -511,6 +511,10 @@
     }
 </style>
 
+<script id="customers-data" type="application/json">
+{!! json_encode($customersList) !!}
+</script>
+
 <script>
 // Close modal with Escape key (antislop R-32 keyboard accessibility)
 document.addEventListener('keydown', function(e) {
@@ -522,7 +526,7 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-let allRawCustomers = @json($customersList);
+let allRawCustomers = JSON.parse(document.getElementById('customers-data')?.textContent || '[]');
 
 function filterCustomerSelectOptions(query) {
     const customerSelect = document.getElementById('selectCustomerBilling');
