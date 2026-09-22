@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Laporan Tiket Gangguan - Central Ticket System</title>
+    <title>Laporan Tiket Gangguan - MANAGEMENT TICKET</title>
     <style>
         @page {
             margin: 12mm 10mm 15mm 10mm;
@@ -121,7 +121,7 @@
     <table class="header-table">
         <tr>
             <td style="width: 70%;">
-                <div class="header-title">CENTRAL TICKET SYSTEM</div>
+                <div class="header-title">MANAGEMENT TICKET</div>
                 <div class="header-subtitle">Laporan Rekapitulasi Data Tiket Gangguan Pelanggan (Multi-Tenant 60 Billing)</div>
             </td>
             <td style="width: 30%; text-align: right;">
@@ -195,9 +195,9 @@
                 </td>
                 <td class="font-mono">{{ $ticket->customer_phone ?? '-' }}</td>
                 <td>
-                    <strong>{{ $ticket->issue_category }}</strong>
-                    @if($ticket->issue_description)
-                        <div style="font-size: 8px; color: #475569; margin-top: 2px;">{{ Str::limit($ticket->issue_description, 70) }}</div>
+                    <strong>{{ $ticket->keterangan_laporan }}</strong>
+                    @if($ticket->action_remark && $ticket->action_remark !== '-')
+                        <div style="font-size: 8px; color: #15803d; margin-top: 2px;"><em>Action: {{ Str::limit($ticket->action_remark, 70) }}</em></div>
                     @endif
                 </td>
                 <td>{{ $ticket->assignedTechnician->name ?? 'Belum ditugaskan' }}</td>
@@ -225,7 +225,7 @@
     <div class="footer">
         <table style="width: 100%;">
             <tr>
-                <td style="text-align: left;">Central Ticket System &copy; {{ date('Y') }} - Dokumen ini dicetak secara otomatis dari sistem.</td>
+                <td style="text-align: left;">MANAGEMENT TICKET &copy; {{ date('Y') }} - Dokumen ini dicetak secara otomatis dari sistem.</td>
                 <td style="text-align: right;">Halaman <span class="page-number"></span></td>
             </tr>
         </table>

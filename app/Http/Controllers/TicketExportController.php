@@ -23,7 +23,7 @@ class TicketExportController extends Controller
     protected function getFilteredTickets(Request $request)
     {
         $user = Auth::user();
-        $query = Ticket::with(['billingInstance', 'assignedTechnician']);
+        $query = Ticket::with(['billingInstance', 'assignedTechnician', 'timelines']);
 
         // Strict role scoping: Technicians can only export tickets assigned to them
         if ($user->role === 'technician') {
@@ -78,11 +78,11 @@ class TicketExportController extends Controller
                 'Nama Pelanggan',
                 'No WA / HP',
                 'Alamat Pelanggan',
-                'Kategori Masalah',
-                'Deskripsi Masalah',
+                'Keterangan Laporan',
+                'Action',
                 'Teknisi',
                 'Status',
-                'Waktu Ditutup'
+                'Waktu Selesai'
             ]);
 
             // Data Rows
@@ -96,8 +96,8 @@ class TicketExportController extends Controller
                     $ticket->customer_name,
                     $ticket->customer_phone ?? '-',
                     $ticket->customer_address ?? '-',
-                    $ticket->issue_category,
-                    $ticket->issue_description ?? '-',
+                    $ticket->keterangan_laporan,
+                    $ticket->action_remark,
                     $ticket->assignedTechnician->name ?? 'Belum Ditugaskan',
                     strtoupper($ticket->status),
                     $ticket->closed_at ? $ticket->closed_at->format('Y-m-d H:i:s') : '-'
@@ -146,8 +146,8 @@ class TicketExportController extends Controller
             'F4' => 'Nama Pelanggan',
             'G4' => 'No WA / HP',
             'H4' => 'Alamat Pelanggan',
-            'I4' => 'Kategori Masalah',
-            'J4' => 'Deskripsi Masalah',
+            'I4' => 'Keterangan Laporan',
+            'J4' => 'Action',
             'K4' => 'Teknisi',
             'L4' => 'Status',
             'M4' => 'Waktu Selesai'
@@ -193,8 +193,8 @@ class TicketExportController extends Controller
             $sheet->setCellValue('F' . $row, $ticket->customer_name);
             $sheet->setCellValueExplicit('G' . $row, $ticket->customer_phone ?? '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $sheet->setCellValue('H' . $row, $ticket->customer_address ?? '-');
-            $sheet->setCellValue('I' . $row, $ticket->issue_category);
-            $sheet->setCellValue('J' . $row, $ticket->issue_description ?? '-');
+            $sheet->setCellValue('I' . $row, $ticket->keterangan_laporan);
+            $sheet->setCellValue('J' . $row, $ticket->action_remark);
             $sheet->setCellValue('K' . $row, $ticket->assignedTechnician->name ?? 'Belum Ditugaskan');
             $sheet->setCellValue('L' . $row, strtoupper($ticket->status));
             $sheet->setCellValue('M' . $row, $ticket->closed_at ? $ticket->closed_at->format('d/m/Y H:i') : '-');

@@ -437,10 +437,10 @@
 
 <!-- Raw Customer Data for Leaflet (JSON parsed safely to prevent linter errors) -->
 <script type="application/json" id="customersData">
-    {!! json_encode($markedCustomers) !!}
+    @json($markedCustomers)
 </script>
 <script type="application/json" id="billingMapData">
-    {!! json_encode($billingMap) !!}
+    @json($billingMap)
 </script>
 @endsection
 
@@ -531,36 +531,49 @@ function initCustomerMap() {
             phoneClean = '62' + phoneClean.substring(1);
         }
 
+        // XSS sanitization helper
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = String(str);
+            return div.innerHTML;
+        }
+
+        const safeNoServices = escapeHtml(cust.no_services);
+        const safeName = escapeHtml(cust.name);
+        const safeAddress = escapeHtml(cust.address || '-');
+        const safeStatus = escapeHtml(cust.status || 'Aktif');
+        const safeOdp = escapeHtml(cust.odp_name || '');
         const tenantTag = cust.billing_node_id && bMap[cust.billing_node_id] 
-            ? `[${bMap[cust.billing_node_id].tenant_code}]` 
+            ? `[${escapeHtml(bMap[cust.billing_node_id].tenant_code)}]` 
             : '';
 
         const popupContent = `
             <div class="p-3.5 space-y-2 text-xs font-sans min-w-[240px]">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                     <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
-                        ${cust.no_services} ${tenantTag ? `<span class="text-slate-400 dark:text-slate-500 font-normal text-[10px] ml-1">${tenantTag}</span>` : ''}
+                        ${safeNoServices} ${tenantTag ? `<span class="text-slate-400 dark:text-slate-500 font-normal text-[10px] ml-1">${tenantTag}</span>` : ''}
                     </span>
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                         statusClass === 'active' ? 'bg-emerald-50 text-emerald-700' :
                         statusClass === 'isolated' ? 'bg-amber-50 text-amber-700' :
                         statusClass === 'free' ? 'bg-sky-50 text-sky-700' : 'bg-rose-50 text-rose-700'
-                    }">${cust.status || 'Aktif'}</span>
+                    }">${safeStatus}</span>
                 </div>
                 <div>
-                    <div class="font-bold text-slate-900 dark:text-white text-sm">${cust.name}</div>
-                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${cust.address || '-'}</div>
+                    <div class="font-bold text-slate-900 dark:text-white text-sm">${safeName}</div>
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${safeAddress}</div>
                 </div>
-                ${cust.odp_name ? `
+                ${safeOdp ? `
                 <div class="inline-flex items-center gap-1 text-[10px] font-mono text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded">
-                    <i class="fa-solid fa-sitemap"></i> ${cust.odp_name}
+                    <i class="fa-solid fa-sitemap"></i> ${safeOdp}
                 </div>` : ''}
                 <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
                     ${phoneClean ? `
-                    <a href="https://wa.me/${phoneClean}" target="_blank" class="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 text-center">
+                    <a href="https://wa.me/${encodeURIComponent(phoneClean)}" target="_blank" class="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 text-center">
                         <i class="fa-brands fa-whatsapp"></i> WA
                     </a>` : ''}
-                    <a href="https://www.google.com/maps/place/${lat},${lng}" target="_blank" class="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1">
+                    <a href="https://www.google.com/maps/place/${encodeURIComponent(lat)},${encodeURIComponent(lng)}" target="_blank" class="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1">
                         <i class="fa-solid fa-location-arrow"></i> Maps
                     </a>
                 </div>

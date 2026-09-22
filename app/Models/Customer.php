@@ -55,4 +55,15 @@ class Customer extends Model
     {
         return $this->hasMany(Ticket::class, 'no_services', 'no_services');
     }
+
+    /**
+     * Get tickets strictly scoped to this customer's billing node to prevent cross-tenant leakage
+     */
+    public function scopedTickets()
+    {
+        return Ticket::where('billing_instance_id', $this->billing_node_id)
+            ->where('no_services', $this->no_services)
+            ->latest()
+            ->get();
+    }
 }

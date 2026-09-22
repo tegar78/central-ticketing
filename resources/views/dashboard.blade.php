@@ -160,8 +160,9 @@
 
                 <div class="relative h-56">
                     <canvas id="ticketTrendChart"
-                            data-close="{{ $closeCount }}"
-                            data-total="{{ $totalCount }}"></canvas>
+                            data-labels='@json($trendLabels)'
+                            data-created='@json($trendCreated)'
+                            data-closed='@json($trendClosed)'></canvas>
                 </div>
             </div>
 
@@ -487,7 +488,7 @@
 </div>
 
 <script id="customers-data" type="application/json">
-{!! json_encode($customersList) !!}
+@json($customersList)
 </script>
 
 <script>
@@ -604,7 +605,18 @@ function fetchCustomersFromSelectedBilling(billingId) {
             if (customerSelect) customerSelect.disabled = false;
         });
 }
+</script>
 
+@if(isset($errors) && $errors->any())
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('createTicketModal')?.classList.remove('hidden');
+    });
+</script>
+@endif
+@endif
+
+<script>
 // Chart.js Visualizations (Figma Reference)
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Donut Chart: Ticket Volumes
@@ -614,15 +626,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const pending = parseInt(donutCtx.dataset.pending || '0', 10);
         const process = parseInt(donutCtx.dataset.process || '0', 10);
         const close = parseInt(donutCtx.dataset.close || '0', 10);
-        const total = parseInt(donutCtx.dataset.total || '1', 10);
+        const total = pending + process + close;
+
+        const chartData = total > 0 ? [pending, process, close] : [1];
+        const chartLabels = total > 0 ? ['Pending', 'Proses', 'Selesai (Close)'] : ['Belum Ada Tiket'];
+        const chartColors = total > 0 ? ['#0284C7', '#EA580C', '#10B981'] : ['#94A3B8'];
 
         new Chart(donutCtx, {
             type: 'doughnut',
             data: {
-                labels: ['Pending', 'Proses', 'Selesai (Close)'],
+                labels: chartLabels,
                 datasets: [{
-                    data: [pending, process, close],
-                    backgroundColor: ['#0284C7', '#EA580C', '#10B981'],
+                    data: chartData,
+                    backgroundColor: chartColors,
                     borderWidth: 2,
                     borderColor: isDark ? '#0f172a' : '#ffffff',
                     hoverOffset: 4
@@ -639,6 +655,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     tooltip: {
                         callbacks: {
                             label: function(context) {
+                                if (total === 0) return ' Belum ada data tiket';
                                 const val = context.raw || 0;
                                 const pct = ((val / total) * 100).toFixed(1);
                                 return ' ' + context.label + ': ' + val + ' tiket (' + pct + '%)';
@@ -650,47 +667,41 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 2. Bar Chart: Weekly Activity Trend
+    // 2. Bar Chart: Weekly Activity Trend (Real Database Data)
     const trendCtx = document.getElementById('ticketTrendChart');
     if (trendCtx && typeof Chart !== 'undefined') {
         const isDark = document.documentElement.classList.contains('dark');
         const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
         const textColor = isDark ? '#94a3b8' : '#64748b';
-        const close = parseInt(trendCtx.dataset.close || '0', 10);
-        const total = parseInt(trendCtx.dataset.total || '0', 10);
+
+        let labels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+        let createdData = [0, 0, 0, 0, 0, 0, 0];
+        let closedData = [0, 0, 0, 0, 0, 0, 0];
+
+        try {
+            if (trendCtx.dataset.labels) labels = JSON.parse(trendCtx.dataset.labels);
+            if (trendCtx.dataset.created) createdData = JSON.parse(trendCtx.dataset.created);
+            if (trendCtx.dataset.closed) closedData = JSON.parse(trendCtx.dataset.closed);
+        } catch (e) {
+            console.error('Error parsing trend chart data:', e);
+        }
 
         new Chart(trendCtx, {
             type: 'bar',
             data: {
-                labels: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
+                labels: labels,
                 datasets: [
                     {
                         label: 'Tiket Selesai',
-                        data: [
-                            Math.round(close * 0.15),
-                            Math.round(close * 0.20),
-                            Math.round(close * 0.18),
-                            Math.round(close * 0.22),
-                            Math.round(close * 0.15),
-                            Math.round(close * 0.06),
-                            Math.round(close * 0.04)
-                        ],
+                        data: closedData,
                         backgroundColor: '#10B981',
                         borderRadius: 6
                     },
                     {
                         label: 'Tiket Baru',
-                        data: [
-                            Math.round(total * 0.18),
-                            Math.round(total * 0.22),
-                            Math.round(total * 0.16),
-                            Math.round(total * 0.20),
-                            Math.round(total * 0.14),
-                            Math.round(total * 0.05),
-                            Math.round(total * 0.05)
-                        ],
-                        backgroundColor: '#E0F2FE',
-                        hoverBackgroundColor: '#BAE6FD',
+                        data: createdData,
+                        backgroundColor: '#38BDF8',
+                        hoverBackgroundColor: '#0284C7',
                         borderRadius: 6
                     }
                 ]
@@ -704,8 +715,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         ticks: { color: textColor, font: { size: 11 } }
                     },
                     y: {
+                        beginAtZero: true,
                         grid: { color: gridColor },
-                        ticks: { color: textColor, font: { size: 10 } }
+                        ticks: {
+                            color: textColor,
+                            font: { size: 10 },
+                            stepSize: 1,
+                            precision: 0
+                        }
                     }
                 },
                 plugins: {
@@ -718,6 +735,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             color: textColor,
                             font: { size: 11, weight: 'bold' }
                         }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ' ' + context.dataset.label + ': ' + context.raw + ' tiket';
+                            }
+                        }
                     }
                 }
             }
@@ -725,13 +749,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
-@if($errors->any())
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('createTicketModal')?.classList.remove('hidden');
-    });
-</script>
-@endif
-@endif
 @endsection

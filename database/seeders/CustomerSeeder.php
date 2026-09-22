@@ -13,13 +13,16 @@ class CustomerSeeder extends Seeder
      */
     public function run(): void
     {
-        $tenant1 = BillingInstance::where('tenant_code', 'BILL-001')->first() ?? BillingInstance::create([
-            'tenant_code' => 'BILL-001',
-            'name' => 'PT Gayuh Media Informatika',
-            'domain_url' => 'http://bill-gyh.gayuh.net.id.test',
-            'api_key' => 'key-bill-001-secret-12345',
-            'is_active' => true,
-        ]);
+        $tenant1 = BillingInstance::updateOrCreate(
+            ['tenant_code' => 'BILL-001'],
+            [
+                'name' => 'PT Gayuh Media Informatika',
+                'domain_url' => 'https://billingtest.gayuh.net.id.test',
+                'api_key' => 'key-bill-001-secret-12345',
+                'callback_url' => 'https://billingtest.gayuh.net.id.test/help/api_callback',
+                'is_active' => true,
+            ]
+        );
 
 
 

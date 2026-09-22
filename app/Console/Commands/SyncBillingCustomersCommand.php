@@ -78,7 +78,8 @@ class SyncBillingCustomersCommand extends Command
 
         // 1. Endpoint Utama: CI3 Controller Central.php (/central/customers)
         try {
-            $response = \Illuminate\Support\Facades\Http::timeout(15)
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                ->timeout(15)
                 ->withHeaders([
                     'X-API-Key' => $tenant->api_key,
                     'Accept'    => 'application/json',
@@ -100,7 +101,8 @@ class SyncBillingCustomersCommand extends Command
 
         // 2. Endpoint CI3 /api/customers (Format REST Server)
         try {
-            $response = \Illuminate\Support\Facades\Http::timeout(15)
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                ->timeout(15)
                 ->withHeaders([
                     'X-API-Key' => $tenant->api_key,
                     'Accept'    => 'application/json',
@@ -122,7 +124,8 @@ class SyncBillingCustomersCommand extends Command
 
         // 3. Endpoint CI3 /sync_central/customers (CI3 push batch ke Central Hub)
         try {
-            $response = \Illuminate\Support\Facades\Http::timeout(15)
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                ->timeout(15)
                 ->withHeaders([
                     'X-API-Key' => $tenant->api_key,
                     'Accept'    => 'application/json',
@@ -161,6 +164,11 @@ class SyncBillingCustomersCommand extends Command
                 continue;
             }
 
+            $isIsolated = (!empty($cust['connection']) && (int)$cust['connection'] === 1)
+                || (!empty($cust['is_isolir']) && (int)$cust['is_isolir'] === 1);
+
+            $status = $isIsolated ? 'isolated' : $this->mapStatus($cust['status'] ?? $cust['c_status'] ?? 'active');
+
             $upsertData[] = [
                 'billing_node_id'    => $tenant->id,
                 'remote_customer_id' => (int) $remoteId,
@@ -173,7 +181,7 @@ class SyncBillingCustomersCommand extends Command
                 'longitude'          => isset($cust['longitude']) ? (string) $cust['longitude'] : null,
                 'package_name'       => $cust['package_name'] ?? $cust['user_profile'] ?? null,
                 'monthly_fee'        => isset($cust['monthly_fee']) ? (float) $cust['monthly_fee'] : (isset($cust['cust_amount']) ? (float) $cust['cust_amount'] : null),
-                'status'             => $this->mapStatus($cust['status'] ?? $cust['c_status'] ?? 'active'),
+                'status'             => $status,
                 'created_at'         => $now,
                 'updated_at'         => $now,
             ];
@@ -325,15 +333,12 @@ class SyncBillingCustomersCommand extends Command
         $status = strtolower(trim($ci3Status));
 
         return match(true) {
-            str_contains($status, 'aktif')     => 'active',
-            str_contains($status, 'active')    => 'active',
-            str_contains($status, 'isolir')    => 'isolated',
-            str_contains($status, 'non')       => 'inactive',
-            str_contains($status, 'nonaktif')  => 'inactive',
-            str_contains($status, 'inactive')  => 'inactive',
-            str_contains($status, 'menunggu')  => 'pending',
-            str_contains($status, 'free')      => 'free',
-            default                            => 'active',
+            str_contains($status, 'isolir') || str_contains($status, 'isolate') => 'isolated',
+            str_contains($status, 'non') || str_contains($status, 'inactive')   => 'inactive',
+            str_contains($status, 'free') || str_contains($status, 'gratis')     => 'free',
+            str_contains($status, 'menunggu') || str_contains($status, 'pending') || str_contains($status, 'wait') => 'pending',
+            str_contains($status, 'aktif') || str_contains($status, 'active')    => 'active',
+            default                                                              => 'active',
         };
     }
 }

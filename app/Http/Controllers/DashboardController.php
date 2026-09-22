@@ -57,6 +57,70 @@ class DashboardController extends Controller
         $closeCount = (clone $baseCountQuery)->where('status', 'close')->count();
         $totalCount = (clone $baseCountQuery)->count();
 
+        // Weekly Activity Trend Data (Last 7 days)
+        $startDate = \Carbon\Carbon::today()->subDays(6)->startOfDay();
+        $endDate = \Carbon\Carbon::today()->endOfDay();
+
+        $createdCountsQuery = Ticket::select(DB::raw('DATE(created_at) as date_val'), DB::raw('count(*) as count_val'))
+            ->whereBetween('created_at', [$startDate, $endDate]);
+
+        if ($user->role === 'technician') {
+            $createdCountsQuery->where('assigned_technician_id', $user->id);
+        }
+        $createdCounts = $createdCountsQuery->groupBy(DB::raw('DATE(created_at)'))
+            ->pluck('count_val', 'date_val');
+
+        $closedTimelineQuery = \App\Models\TicketTimeline::select(DB::raw('DATE(created_at) as date_val'), DB::raw('count(distinct ticket_id) as count_val'))
+            ->where('status', 'close')
+            ->whereBetween('created_at', [$startDate, $endDate]);
+
+        if ($user->role === 'technician') {
+            $closedTimelineQuery->whereHas('ticket', function ($q) use ($user) {
+                $q->where('assigned_technician_id', $user->id);
+            });
+        }
+        $closedTimelineCounts = $closedTimelineQuery->groupBy(DB::raw('DATE(created_at)'))
+            ->pluck('count_val', 'date_val');
+
+        $fallbackClosedQuery = Ticket::select(DB::raw('DATE(updated_at) as date_val'), DB::raw('count(*) as count_val'))
+            ->where('status', 'close')
+            ->whereBetween('updated_at', [$startDate, $endDate]);
+
+        if ($user->role === 'technician') {
+            $fallbackClosedQuery->where('assigned_technician_id', $user->id);
+        }
+        $fallbackClosedCounts = $fallbackClosedQuery->groupBy(DB::raw('DATE(updated_at)'))
+            ->pluck('count_val', 'date_val');
+
+        $dayNames = [
+            'Sun' => 'Min',
+            'Mon' => 'Sen',
+            'Tue' => 'Sel',
+            'Wed' => 'Rab',
+            'Thu' => 'Kam',
+            'Fri' => 'Jum',
+            'Sat' => 'Sab',
+        ];
+
+        $trendLabels = [];
+        $trendCreated = [];
+        $trendClosed = [];
+
+        for ($i = 6; $i >= 0; $i--) {
+            $date = \Carbon\Carbon::today()->subDays($i);
+            $dateKey = $date->format('Y-m-d');
+            $dayName = $dayNames[$date->format('D')] ?? $date->format('D');
+
+            $trendLabels[] = $dayName . ' (' . $date->format('d/m') . ')';
+            $trendCreated[] = (int) ($createdCounts[$dateKey] ?? 0);
+
+            $closedVal = max(
+                (int) ($closedTimelineCounts[$dateKey] ?? 0),
+                (int) ($fallbackClosedCounts[$dateKey] ?? 0)
+            );
+            $trendClosed[] = $closedVal;
+        }
+
         $tenants = BillingInstance::where('is_active', true)->get();
         $technicians = User::where('role', 'technician')->where('is_active', true)->get();
 
@@ -95,7 +159,10 @@ class DashboardController extends Controller
             'totalCount',
             'tenants',
             'technicians',
-            'customersList'
+            'customersList',
+            'trendLabels',
+            'trendCreated',
+            'trendClosed'
         ));
     }
 }

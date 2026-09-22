@@ -21,73 +21,8 @@ class CustomerController extends Controller
     {
         $user = Auth::user();
 
-        // Auto-sync any existing ticket customers into Customer table to ensure 100% data coverage
-        $ticketCustomers = Ticket::select(
-                'billing_instance_id',
-                'no_services',
-                DB::raw('MAX(customer_name) as name'),
-                DB::raw('MAX(customer_phone) as phone'),
-                DB::raw('MAX(customer_address) as address')
-            )
-            ->whereNotNull('no_services')
-            ->where('no_services', '!=', '')
-            ->groupBy('no_services', 'billing_instance_id')
-            ->get();
-
-        foreach ($ticketCustomers as $tc) {
-            $customerExists = Customer::where('billing_node_id', $tc->billing_instance_id)
-                ->where('no_services', $tc->no_services)
-                ->exists();
-
-            if (!$customerExists) {
-                $remoteCustomerId = null;
-
-                // Try fetching actual customer_id from CI3 database using dynamic connection
-                try {
-                    $inst = BillingInstance::find($tc->billing_instance_id);
-                    $dbConn = $inst ? ($inst->getDatabaseConnection() ?: ($inst->tenant_code === 'BILL-001' ? DB::connection('billing_ci3') : null)) : null;
-
-                    if ($dbConn) {
-                        $ci3Cust = $dbConn->table('customer')
-                            ->where('no_services', $tc->no_services)
-                            ->select('customer_id')
-                            ->first();
-
-                        if ($ci3Cust && !empty($ci3Cust->customer_id)) {
-                            $idTaken = Customer::where('billing_node_id', $tc->billing_instance_id)
-                                ->where('remote_customer_id', $ci3Cust->customer_id)
-                                ->exists();
-
-                            if (!$idTaken) {
-                                $remoteCustomerId = $ci3Cust->customer_id;
-                            }
-                        }
-                    }
-                } catch (\Exception $e) {
-                    // Fallback to generated ID
-                }
-
-                if (!$remoteCustomerId) {
-                    $maxRemoteId = (int) Customer::where('billing_node_id', $tc->billing_instance_id)->max('remote_customer_id');
-                    $remoteCustomerId = max($maxRemoteId + 1, 900001);
-                }
-
-                Customer::create([
-                    'billing_node_id'    => $tc->billing_instance_id,
-                    'remote_customer_id' => $remoteCustomerId,
-                    'no_services'        => $tc->no_services,
-                    'name'               => $tc->name ?? 'Pelanggan Billing',
-                    'phone'              => $tc->phone,
-                    'address'            => $tc->address,
-                    'status'             => 'active',
-                ]);
-            }
-        }
-
-        // Base query with relationships
-        $query = Customer::with(['billingNode', 'tickets' => function ($q) {
-            $q->latest();
-        }]);
+        // Base query with billingNode relationship
+        $query = Customer::with('billingNode');
 
         // Global Search across 60 billing servers by no_services, name, phone, address, or odp_name
         if ($request->filled('search')) {
@@ -200,7 +135,8 @@ class CustomerController extends Controller
                     $domainUrl = rtrim($billingInstance->domain_url, '/');
                     foreach (["{$domainUrl}/central/customers", "{$domainUrl}/api/customers"] as $apiUrl) {
                         try {
-                            $response = Http::timeout(3)
+                            $response = Http::withoutVerifying()
+                                ->timeout(3)
                                 ->withHeaders([
                                     'X-API-Key' => $billingInstance->api_key,
                                     'Accept'    => 'application/json',
@@ -334,15 +270,24 @@ class CustomerController extends Controller
             \Illuminate\Support\Facades\Artisan::call('sync:billing-customers', [
                 '--all' => true
             ]);
-            return back()->with('success', 'Sinkronisasi data pelanggan dari semua server billing aktif berhasil dilaksanakan.');
+            $totalCount = Customer::count();
+            return back()->with('success', "Sinkronisasi data pelanggan dari semua server billing selesai. Total data saat ini: {$totalCount} pelanggan.");
         }
 
         $tenantCode = $tenantCode ?: 'BILL-001';
+        $instance = BillingInstance::where('tenant_code', $tenantCode)->first();
 
         \Illuminate\Support\Facades\Artisan::call('sync:billing-customers', [
             'tenant_code' => $tenantCode
         ]);
 
-        return back()->with('success', 'Sinkronisasi data pelanggan dari server billing ' . $tenantCode . ' berhasil dilaksanakan.');
+        $syncedCount = $instance ? Customer::where('billing_node_id', $instance->id)->count() : 0;
+
+        if ($syncedCount > 0) {
+            return back()->with('success', "Sinkronisasi berhasil! Ditemukan {$syncedCount} pelanggan dari server billing {$tenantCode}.");
+        }
+
+        $domain = $instance?->domain_url ?? 'belum diatur';
+        return back()->with('warning', "Sinkronisasi {$tenantCode} selesai tetapi 0 data tersimpan. Periksa URL server billing ({$domain}) dan API Key.");
     }
 }

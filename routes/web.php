@@ -16,7 +16,7 @@ Route::get('/', function () {
 
 // Auth Routes
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Authenticated Routes
@@ -43,10 +43,12 @@ Route::middleware('auth')->group(function () {
     // Maps Location Pelanggan (Synchronized from Billtest)
     Route::get('/maps', [MapController::class, 'index'])->name('maps.index');
 
-    // User Management Routes
-    Route::get('/users', [UserController::class, 'index'])->name('users.index');
-    Route::post('/users', [UserController::class, 'store'])->name('users.store');
-    Route::put('/users/{id}', [UserController::class, 'update'])->name('users.update');
-    Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+    // User Management Routes (Strictly Restricted to Admin Role)
+    Route::middleware('admin')->group(function () {
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::put('/users/{id}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+    });
 });
 

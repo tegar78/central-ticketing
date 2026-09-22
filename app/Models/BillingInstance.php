@@ -20,6 +20,36 @@ class BillingInstance extends Model
         'db_password',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    /**
+     * Decrypt database password upon retrieval, supporting fallback for unencrypted legacy values.
+     */
+    public function getDbPasswordAttribute($value)
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($value);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            return $value;
+        }
+    }
+
+    /**
+     * Automatically encrypt database password upon saving.
+     */
+    public function setDbPasswordAttribute($value)
+    {
+        $this->attributes['db_password'] = !empty($value)
+            ? \Illuminate\Support\Facades\Crypt::encryptString($value)
+            : null;
+    }
+
     /**
      * Dynamically configure and get a database connection for this billing instance.
      *

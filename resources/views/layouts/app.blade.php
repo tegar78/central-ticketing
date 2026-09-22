@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ config('app.name', 'Ticket Support - Central Ticket System') }}</title>
+    <title>{{ config('app.name', 'MANAGEMENT TICKET') }}</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
     <!-- Prevent FOUC: Apply dark or light class immediately -->
     <script>
         if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -53,14 +54,12 @@
     <!-- Desktop Left Sidebar (Figma Reference: Ticket Support) -->
     <aside class="hidden lg:flex flex-col w-64 xl:w-72 bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 shrink-0 sticky top-0 h-screen z-40 select-none">
         <!-- Sidebar Brand Logo -->
-        <div class="h-16 px-6 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80">
-            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded-xl py-1">
-                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/25 group-hover:scale-105 transition-transform">
-                    <i class="fa-solid fa-headset text-sm"></i>
-                </div>
+        <div class="h-16 px-5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80">
+            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-orange-400 rounded-xl py-1">
+                <img src="{{ asset('images/logo.png') }}" alt="MANAGEMENT TICKET" class="w-9 h-9 object-contain group-hover:scale-105 transition-transform drop-shadow-sm">
                 <div>
-                    <span class="font-bold text-base text-slate-900 dark:text-white tracking-tight leading-tight block">Ticket Support</span>
-                    <span class="text-[10px] block text-emerald-600 dark:text-emerald-400 font-semibold tracking-wider uppercase">Central System</span>
+                    <span class="font-black text-sm text-slate-900 dark:text-white tracking-tight leading-tight block uppercase">MANAGEMENT</span>
+                    <span class="text-[10px] block text-orange-500 dark:text-orange-400 font-black tracking-widest uppercase">TICKET</span>
                 </div>
             </a>
         </div>
@@ -89,7 +88,9 @@
                         <i class="fa-solid fa-users text-base {{ request()->routeIs('customers.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
                         <span>Data Pelanggan</span>
                     </a>
+                    @endif
 
+                    @if(auth()->user()->role === 'admin')
                     <a href="{{ route('users.index') }}" 
                        class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('users.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
                         <i class="fa-solid fa-user-gear text-base {{ request()->routeIs('users.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
@@ -248,6 +249,8 @@
                     <i class="fa-solid fa-users w-5 text-center text-emerald-500"></i>
                     <span>Data Pelanggan</span>
                 </a>
+                @endif
+                @if(auth()->user()->role === 'admin')
                 <a href="{{ route('users.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('users.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
                     <i class="fa-solid fa-user-gear w-5 text-center text-emerald-500"></i>
                     <span>Kelola User</span>
@@ -293,7 +296,7 @@
 
         <!-- Footer -->
         <footer class="border-t border-slate-200/80 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50 py-4 px-6 text-center text-xs text-slate-400 dark:text-slate-500">
-            &copy; {{ date('Y') }} Central Ticket Support. Terhubung dengan Billing Gayuh.
+            &copy; {{ date('Y') }} MANAGEMENT TICKET. Terhubung dengan Billing Gayuh.
         </footer>
     </div>
 

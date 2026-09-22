@@ -6,9 +6,21 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class UserController extends Controller
+class UserController extends Controller implements HasMiddleware
 {
+    /**
+     * Get the middleware that should be assigned to the controller (Laravel 11).
+     */
+    public static function middleware(): array
+    {
+        return [
+            'admin',
+        ];
+    }
+
     public function index(Request $request)
     {
         $query = User::query();
