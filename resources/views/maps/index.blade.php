@@ -33,6 +33,43 @@
         margin: 0 !important;
         line-height: 1.4;
     }
+    /* Reset Leaflet link color overrides inside container and popup */
+    .leaflet-container a {
+        color: inherit;
+        text-decoration: none;
+    }
+    .leaflet-popup-content a {
+        color: inherit;
+        text-decoration: none;
+    }
+    .leaflet-popup-content a.popup-wa-btn {
+        background-color: #10B981 !important;
+        color: #ffffff !important;
+    }
+    .leaflet-popup-content a.popup-wa-btn:hover {
+        background-color: #059669 !important;
+        color: #ffffff !important;
+    }
+    .leaflet-popup-content a.popup-wa-btn i,
+    .leaflet-popup-content a.popup-wa-btn span {
+        color: #ffffff !important;
+    }
+    .leaflet-popup-content a.popup-maps-btn {
+        background-color: #f1f5f9;
+        color: #334155 !important;
+    }
+    .leaflet-popup-content a.popup-maps-btn:hover {
+        background-color: #e2e8f0;
+        color: #0f172a !important;
+    }
+    .dark .leaflet-popup-content a.popup-maps-btn {
+        background-color: #1e293b;
+        color: #cbd5e1 !important;
+    }
+    .dark .leaflet-popup-content a.popup-maps-btn:hover {
+        background-color: #334155;
+        color: #ffffff !important;
+    }
     .dark .leaflet-popup-content-wrapper {
         background-color: #0f172a;
         color: #f8fafc;
@@ -123,27 +160,27 @@
             <div class="flex flex-wrap items-center gap-1.5">
                 <span class="text-xs font-semibold text-slate-400 dark:text-slate-500 mr-1 hidden md:inline uppercase tracking-wider">Status:</span>
                 
-                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_page']), ['status' => 'all'])) }}"
+                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_status', 'unmarked_search', 'unmarked_page']), ['status' => 'all'])) }}"
                    class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ !request('status') || request('status') === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }}">
                     Semua <span class="ml-1 opacity-80">({{ number_format($statusCounts['all']) }})</span>
                 </a>
 
-                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_page']), ['status' => 'active'])) }}"
+                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_status', 'unmarked_search', 'unmarked_page']), ['status' => 'active'])) }}"
                    class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request('status') === 'active' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }}">
                     Aktif <span class="ml-1 opacity-80">({{ number_format($statusCounts['active']) }})</span>
                 </a>
 
-                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_page']), ['status' => 'isolated'])) }}"
+                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_status', 'unmarked_search', 'unmarked_page']), ['status' => 'isolated'])) }}"
                    class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request('status') === 'isolated' ? 'bg-amber-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }}">
                     Isolir <span class="ml-1 opacity-80">({{ number_format($statusCounts['isolated']) }})</span>
                 </a>
 
-                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_page']), ['status' => 'inactive'])) }}"
+                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_status', 'unmarked_search', 'unmarked_page']), ['status' => 'inactive'])) }}"
                    class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request('status') === 'inactive' ? 'bg-rose-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }}">
                     Non-Aktif <span class="ml-1 opacity-80">({{ number_format($statusCounts['inactive']) }})</span>
                 </a>
 
-                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_page']), ['status' => 'free'])) }}"
+                <a href="{{ route('maps.index', array_merge(request()->except(['status', 'unmarked_status', 'unmarked_search', 'unmarked_page']), ['status' => 'free'])) }}"
                    class="px-3 py-1.5 rounded-xl text-xs font-semibold transition-all {{ request('status') === 'free' ? 'bg-sky-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }}">
                     Free <span class="ml-1 opacity-80">({{ number_format($statusCounts['free']) }})</span>
                 </a>
@@ -247,20 +284,24 @@
                 <div class="flex flex-wrap items-center gap-1.5">
                     <span class="text-xs font-semibold text-slate-400 mr-1"><i class="fa-solid fa-filter text-emerald-500 mr-1"></i>Status:</span>
                     <a href="{{ request()->fullUrlWithQuery(['unmarked_status' => 'all', 'unmarked_page' => 1]) }}" 
-                       class="px-2.5 py-1 rounded-lg text-xs font-semibold {{ !request('unmarked_status') || request('unmarked_status') === 'all' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700' }}">
-                        Semua
+                       class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {{ !request('unmarked_status') || request('unmarked_status') === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500' }}">
+                        Semua @if(isset($unmarkedStatusCounts['all']))<span class="ml-0.5 opacity-85 text-[11px]">({{ number_format($unmarkedStatusCounts['all']) }})</span>@endif
                     </a>
                     <a href="{{ request()->fullUrlWithQuery(['unmarked_status' => 'active', 'unmarked_page' => 1]) }}" 
-                       class="px-2.5 py-1 rounded-lg text-xs font-semibold {{ request('unmarked_status') === 'active' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700' }}">
-                        Aktif
+                       class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {{ request('unmarked_status') === 'active' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500' }}">
+                        Aktif @if(isset($unmarkedStatusCounts['active']))<span class="ml-0.5 opacity-85 text-[11px]">({{ number_format($unmarkedStatusCounts['active']) }})</span>@endif
                     </a>
                     <a href="{{ request()->fullUrlWithQuery(['unmarked_status' => 'isolated', 'unmarked_page' => 1]) }}" 
-                       class="px-2.5 py-1 rounded-lg text-xs font-semibold {{ request('unmarked_status') === 'isolated' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700' }}">
-                        Isolir
+                       class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {{ request('unmarked_status') === 'isolated' ? 'bg-amber-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-amber-500' }}">
+                        Isolir @if(isset($unmarkedStatusCounts['isolated']))<span class="ml-0.5 opacity-85 text-[11px]">({{ number_format($unmarkedStatusCounts['isolated']) }})</span>@endif
                     </a>
                     <a href="{{ request()->fullUrlWithQuery(['unmarked_status' => 'inactive', 'unmarked_page' => 1]) }}" 
-                       class="px-2.5 py-1 rounded-lg text-xs font-semibold {{ request('unmarked_status') === 'inactive' ? 'bg-rose-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700' }}">
-                        Non-Aktif
+                       class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {{ request('unmarked_status') === 'inactive' ? 'bg-rose-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-rose-500' }}">
+                        Non-Aktif @if(isset($unmarkedStatusCounts['inactive']))<span class="ml-0.5 opacity-85 text-[11px]">({{ number_format($unmarkedStatusCounts['inactive']) }})</span>@endif
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['unmarked_status' => 'free', 'unmarked_page' => 1]) }}" 
+                       class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {{ request('unmarked_status') === 'free' ? 'bg-sky-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-sky-500' }}">
+                        Free @if(isset($unmarkedStatusCounts['free']))<span class="ml-0.5 opacity-85 text-[11px]">({{ number_format($unmarkedStatusCounts['free']) }})</span>@endif
                     </a>
                 </div>
 
@@ -351,7 +392,11 @@
                             </td>
                             <td class="px-4 py-3.5 text-center whitespace-nowrap">
                                 <button type="button" 
-                                        onclick="openTandaiModal('{{ $customer->id }}', '{{ addslashes($customer->name) }}', '{{ $customer->no_services }}', '{{ addslashes($customer->address ?? '') }}')"
+                                        data-id="{{ $customer->id }}"
+                                        data-name="{{ $customer->name }}"
+                                        data-no-services="{{ $customer->no_services }}"
+                                        data-address="{{ $customer->address ?? '' }}"
+                                        onclick="openTandaiModalFromEl(this)"
                                         class="px-2.5 py-1 bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white dark:bg-amber-950/40 dark:hover:bg-amber-600 dark:text-amber-300 dark:hover:text-white rounded-lg border border-amber-200 dark:border-amber-800/50 transition-all text-xs font-semibold flex items-center gap-1 mx-auto">
                                     <i class="fa-solid fa-location-crosshairs text-xs"></i> Tandai
                                 </button>
@@ -570,11 +615,11 @@ function initCustomerMap() {
                 </div>` : ''}
                 <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
                     ${phoneClean ? `
-                    <a href="https://wa.me/${encodeURIComponent(phoneClean)}" target="_blank" class="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 text-center">
-                        <i class="fa-brands fa-whatsapp"></i> WA
+                    <a href="https://wa.me/${encodeURIComponent(phoneClean)}" target="_blank" class="popup-wa-btn flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 text-center shadow-sm" style="color: #ffffff !important; background-color: #10B981 !important;">
+                        <i class="fa-brands fa-whatsapp text-sm" style="color: #ffffff !important;"></i> <span style="color: #ffffff !important;">WA</span>
                     </a>` : ''}
-                    <a href="https://www.google.com/maps/place/${encodeURIComponent(lat)},${encodeURIComponent(lng)}" target="_blank" class="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1">
-                        <i class="fa-solid fa-location-arrow"></i> Maps
+                    <a href="https://www.google.com/maps/place/${encodeURIComponent(lat)},${encodeURIComponent(lng)}" target="_blank" class="popup-maps-btn py-1.5 px-2.5 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                        <i class="fa-solid fa-location-arrow text-emerald-500"></i> <span>Maps</span>
                     </a>
                 </div>
             </div>
@@ -652,6 +697,16 @@ function toggleSatelliteLayer() {
 }
 
 // Modal Tandai Koordinat Pelanggan
+function openTandaiModalFromEl(btn) {
+    if (!btn) return;
+    openTandaiModal(
+        btn.getAttribute('data-id'),
+        btn.getAttribute('data-name'),
+        btn.getAttribute('data-no-services'),
+        btn.getAttribute('data-address')
+    );
+}
+
 function openTandaiModal(id, name, noServices, address) {
     const modal = document.getElementById('tandaiModal');
     const form = document.getElementById('tandaiForm');
@@ -676,6 +731,25 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeTandaiModal();
     }
+});
+
+// Clear lingering hash immediately if present (e.g. #map-section from previous navigation)
+if (window.location.hash) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+}
+
+// Clear any saved scroll position
+try {
+    sessionStorage.removeItem('maps_scroll_pos');
+} catch (e) {}
+
+// Ensure page stays fixed at top (0,0) so top navbar, header, and maps are completely visible without scrolling
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+window.scrollTo(0, 0);
+document.addEventListener('DOMContentLoaded', function() {
+    window.scrollTo(0, 0);
 });
 </script>
 @endpush

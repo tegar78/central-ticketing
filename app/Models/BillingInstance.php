@@ -27,7 +27,7 @@ class BillingInstance extends Model
     /**
      * Decrypt database password upon retrieval, supporting fallback for unencrypted legacy values.
      */
-    public function getDbPasswordAttribute($value)
+    public function getDbPasswordAttribute(?string $value): ?string
     {
         if (empty($value)) {
             return null;
@@ -43,7 +43,7 @@ class BillingInstance extends Model
     /**
      * Automatically encrypt database password upon saving.
      */
-    public function setDbPasswordAttribute($value)
+    public function setDbPasswordAttribute(?string $value): void
     {
         $this->attributes['db_password'] = !empty($value)
             ? \Illuminate\Support\Facades\Crypt::encryptString($value)

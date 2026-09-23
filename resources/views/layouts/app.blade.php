@@ -256,6 +256,35 @@
                     <span>Kelola User</span>
                 </a>
                 @endif
+
+                <!-- Quick Ticket Status Filter in Mobile Drawer -->
+                <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-1.5">Status Tiket</div>
+                    <div class="space-y-1">
+                        <a href="{{ route('dashboard', ['status' => 'pending']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'pending' ? 'bg-sky-50 text-sky-700 font-bold dark:bg-sky-500/10 dark:text-sky-300' : 'text-slate-700 dark:text-slate-300' }}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+                                <span>Pending (Baru)</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+                        </a>
+                        <a href="{{ route('dashboard', ['status' => 'process']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'process' ? 'bg-amber-50 text-amber-700 font-bold dark:bg-amber-500/10 dark:text-amber-300' : 'text-slate-700 dark:text-slate-300' }}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                <span>Dalam Proses</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+                        </a>
+                        <a href="{{ route('dashboard', ['status' => 'close']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'close' ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300' }}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span>Selesai (Close)</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+                        </a>
+                    </div>
+                </div>
+
                 <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
                     <form action="{{ route('logout') }}" method="POST">
                         @csrf

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -80,7 +81,7 @@ class UserController extends Controller implements HasMiddleware
         return back()->with('success', 'User baru berhasil ditambahkan.');
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, int|string $id)
     {
         $user = User::findOrFail($id);
 
@@ -110,12 +111,12 @@ class UserController extends Controller implements HasMiddleware
         return back()->with('success', 'Data user berhasil diperbarui.');
     }
 
-    public function destroy($id)
+    public function destroy(int|string $id)
     {
         $user = User::findOrFail($id);
         
         // Prevent deleting self
-        if ($user->id === auth()->id()) {
+        if ($user->id === Auth::id()) {
             return back()->with('error', 'Anda tidak dapat menghapus akun Anda sendiri.');
         }
 

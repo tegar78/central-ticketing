@@ -86,7 +86,7 @@ class MapController extends Controller
         $unmarkedStatus = $request->query('unmarked_status');
         $unmarkedSearch = $request->query('unmarked_search');
 
-        $unmarkedQuery = Customer::where(function ($q) {
+        $baseUnmarkedQuery = Customer::where(function ($q) {
             $q->whereNull('latitude')
               ->orWhere('latitude', '')
               ->orWhereNull('longitude')
@@ -96,8 +96,18 @@ class MapController extends Controller
         });
 
         if ($billingNodeId) {
-            $unmarkedQuery->where('billing_node_id', $billingNodeId);
+            $baseUnmarkedQuery->where('billing_node_id', $billingNodeId);
         }
+
+        $unmarkedStatusCounts = [
+            'all'      => (clone $baseUnmarkedQuery)->count(),
+            'active'   => (clone $baseUnmarkedQuery)->where('status', 'active')->count(),
+            'isolated' => (clone $baseUnmarkedQuery)->where('status', 'isolated')->count(),
+            'inactive' => (clone $baseUnmarkedQuery)->where('status', 'inactive')->count(),
+            'free'     => (clone $baseUnmarkedQuery)->where('status', 'free')->count(),
+        ];
+
+        $unmarkedQuery = clone $baseUnmarkedQuery;
 
         if ($unmarkedStatus && $unmarkedStatus !== 'all') {
             $unmarkedQuery->where('status', $unmarkedStatus);
@@ -113,7 +123,9 @@ class MapController extends Controller
             });
         }
 
-        $unmarkedCustomers = $unmarkedQuery->latest('updated_at')->paginate(15, ['*'], 'unmarked_page')->withQueryString();
+        $unmarkedCustomers = $unmarkedQuery->latest('updated_at')
+            ->paginate(15, ['*'], 'unmarked_page')
+            ->withQueryString();
 
         $billingInstances = BillingInstance::where('is_active', true)->get();
         $billingMap = $billingInstances->keyBy('id');
@@ -125,6 +137,7 @@ class MapController extends Controller
             'markedCount',
             'unmarkedCount',
             'statusCounts',
+            'unmarkedStatusCounts',
             'unmarkedCustomers',
             'billingInstances',
             'billingMap'

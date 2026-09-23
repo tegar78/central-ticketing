@@ -240,7 +240,7 @@ class TicketWebController extends Controller
     /**
      * Resolve the webhook callback URL for a billing instance
      */
-    private function resolveCallbackUrl($billingInstance): ?string
+    private function resolveCallbackUrl(?BillingInstance $billingInstance): ?string
     {
         if (!$billingInstance) return null;
 

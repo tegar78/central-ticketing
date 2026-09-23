@@ -3,6 +3,108 @@
 @section('content')
 <div class="space-y-6 sm:space-y-8">
     <!-- Header Banner (Figma Reference) -->
+    @if(request()->filled('status'))
+    <!-- Header Banner for Filtered Tickets View -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm transition-colors">
+        <div>
+            <div class="flex items-center gap-2 mb-2 text-xs text-slate-500 dark:text-slate-400">
+                <a href="{{ route('dashboard') }}" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors flex items-center gap-1 font-medium">
+                    <i class="fa-solid fa-chart-pie text-[11px]"></i>
+                    <span>Dashboard</span>
+                </a>
+                <i class="fa-solid fa-chevron-right text-[9px] text-slate-300 dark:text-slate-600"></i>
+                <span class="font-semibold text-slate-700 dark:text-slate-200">Tiket</span>
+                <i class="fa-solid fa-chevron-right text-[9px] text-slate-300 dark:text-slate-600"></i>
+                @if(request('status') === 'pending')
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Pending (Baru)
+                    </span>
+                @elseif(request('status') === 'process')
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Dalam Proses
+                    </span>
+                @elseif(request('status') === 'close')
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Selesai (Close)
+                    </span>
+                @else
+                    <span class="font-bold text-slate-700 dark:text-slate-300">{{ ucfirst(request('status')) }}</span>
+                @endif
+            </div>
+
+            <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+                @if(request('status') === 'pending')
+                    <i class="fa-solid fa-clock-rotate-left text-sky-500"></i>
+                    <span>Daftar Tiket: Pending (Baru)</span>
+                @elseif(request('status') === 'process')
+                    <i class="fa-solid fa-spinner text-amber-500"></i>
+                    <span>Daftar Tiket: Dalam Proses</span>
+                @elseif(request('status') === 'close')
+                    <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                    <span>Daftar Tiket: Selesai (Close)</span>
+                @else
+                    <i class="fa-solid fa-ticket text-emerald-600"></i>
+                    <span>Daftar Tiket: {{ ucfirst(request('status')) }}</span>
+                @endif
+            </h1>
+            <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">
+                Menampilkan tiket gangguan dengan status 
+                <strong class="text-slate-800 dark:text-slate-100 font-bold">
+                    {{ request('status') === 'pending' ? 'Pending (Baru)' : (request('status') === 'process' ? 'Dalam Proses' : (request('status') === 'close' ? 'Selesai (Close)' : request('status'))) }}
+                </strong> 
+                — Total <strong class="text-emerald-600 dark:text-emerald-400">{{ $tickets->total() }}</strong> tiket ditemukan.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+            <a href="{{ route('dashboard') }}" 
+               class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-slate-200/60 dark:border-slate-700">
+                <i class="fa-solid fa-chart-pie text-xs"></i>
+                <span>Lihat Dashboard & Statistik</span>
+            </a>
+
+            @if(in_array($user->role, ['admin', 'operator']))
+            <button type="button" onclick="document.getElementById('createTicketModal').classList.remove('hidden')" 
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-600/25 transition-all hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span>Tambah Tiket Baru</span>
+            </button>
+            @endif
+        </div>
+    </div>
+
+    <!-- Quick Status Pill Navigation -->
+    <div class="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+        <a href="{{ route('dashboard') }}" 
+           class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-emerald-500 hover:text-emerald-600">
+            <i class="fa-solid fa-ticket text-xs"></i>
+            <span>Semua Tiket</span>
+            <span class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md text-[10px]">{{ number_format($totalCount) }}</span>
+        </a>
+
+        <a href="{{ route('dashboard', ['status' => 'pending']) }}" 
+           class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all {{ request('status') === 'pending' ? 'bg-sky-50 dark:bg-sky-950/40 border-2 border-sky-500 text-sky-700 dark:text-sky-300 shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-sky-500 hover:text-sky-600' }}">
+            <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+            <span>Pending (Baru)</span>
+            <span class="px-1.5 py-0.5 {{ request('status') === 'pending' ? 'bg-sky-200 dark:bg-sky-900/60 text-sky-800 dark:text-sky-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' }} rounded-md text-[10px] font-bold">{{ number_format($pendingCount) }}</span>
+        </a>
+
+        <a href="{{ route('dashboard', ['status' => 'process']) }}" 
+           class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all {{ request('status') === 'process' ? 'bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-500 text-amber-700 dark:text-amber-300 shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-amber-500 hover:text-amber-600' }}">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span>Dalam Proses</span>
+            <span class="px-1.5 py-0.5 {{ request('status') === 'process' ? 'bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' }} rounded-md text-[10px] font-bold">{{ number_format($processCount) }}</span>
+        </a>
+
+        <a href="{{ route('dashboard', ['status' => 'close']) }}" 
+           class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all {{ request('status') === 'close' ? 'bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500 text-emerald-700 dark:text-emerald-300 shadow-sm' : 'bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-emerald-500 hover:text-emerald-600' }}">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Selesai (Close)</span>
+            <span class="px-1.5 py-0.5 {{ request('status') === 'close' ? 'bg-emerald-200 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' }} rounded-md text-[10px] font-bold">{{ number_format($closeCount) }}</span>
+        </a>
+    </div>
+    @else
+    <!-- Full Dashboard Header Banner -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm transition-colors">
         <div>
             <div class="flex items-center gap-2 mb-1">
@@ -176,6 +278,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     <!-- Filters Section (Figma Reference) -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm transition-colors">
