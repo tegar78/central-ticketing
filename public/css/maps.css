@@ -1,0 +1,121 @@
+/**
+ * MANAGEMENT TICKET - Maps & GPS Location Stylesheet
+ * Custom Leaflet marker pins, popup overrides, and cluster indicators
+ */
+
+/* Custom Marker Pin Styling */
+.custom-map-pin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #ffffff;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    border: 2px solid #ffffff;
+    font-size: 11px;
+}
+.custom-map-pin.active { background-color: #10B981; }
+.custom-map-pin.isolated { background-color: #F59E0B; }
+.custom-map-pin.inactive { background-color: #EF4444; }
+.custom-map-pin.free { background-color: #0EA5E9; }
+
+/* Leaflet Popup Styling Override */
+.leaflet-popup-content-wrapper {
+    border-radius: 1rem;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.leaflet-popup-content {
+    margin: 0 !important;
+    line-height: 1.4;
+}
+
+/* Reset Leaflet Link Color Overrides */
+.leaflet-container a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.leaflet-popup-content a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.leaflet-popup-content a.popup-wa-btn {
+    background-color: #10B981 !important;
+    color: #ffffff !important;
+}
+
+.leaflet-popup-content a.popup-wa-btn:hover {
+    background-color: #059669 !important;
+    color: #ffffff !important;
+}
+
+.leaflet-popup-content a.popup-wa-btn i,
+.leaflet-popup-content a.popup-wa-btn span {
+    color: #ffffff !important;
+}
+
+.leaflet-popup-content a.popup-maps-btn {
+    background-color: #f1f5f9;
+    color: #334155 !important;
+}
+
+.leaflet-popup-content a.popup-maps-btn:hover {
+    background-color: #e2e8f0;
+    color: #0f172a !important;
+}
+
+/* Dark Mode Popup Overrides */
+.dark .leaflet-popup-content a.popup-maps-btn {
+    background-color: #1e293b;
+    color: #cbd5e1 !important;
+}
+
+.dark .leaflet-popup-content a.popup-maps-btn:hover {
+    background-color: #334155;
+    color: #ffffff !important;
+}
+
+.dark .leaflet-popup-content-wrapper {
+    background-color: #0f172a;
+    color: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark .leaflet-popup-tip {
+    background-color: #0f172a;
+}
+
+/* Marker Cluster Overrides */
+.marker-cluster-small {
+    background-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.marker-cluster-small div {
+    background-color: rgba(16, 185, 129, 0.9) !important;
+    color: white !important;
+    font-weight: bold;
+}
+
+.marker-cluster-medium {
+    background-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.marker-cluster-medium div {
+    background-color: rgba(245, 158, 11, 0.9) !important;
+    color: white !important;
+    font-weight: bold;
+}
+
+.marker-cluster-large {
+    background-color: rgba(14, 165, 233, 0.3) !important;
+}
+
+.marker-cluster-large div {
+    background-color: rgba(14, 165, 233, 0.9) !important;
+    color: white !important;
+    font-weight: bold;
+}
