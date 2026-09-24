@@ -25,6 +25,20 @@ class BillingInstance extends Model
     ];
 
     /**
+     * The attributes that should be hidden for serialization to prevent sensitive credential exposure.
+     *
+     * @var array<int, string>
+     */
+    protected $hidden = [
+        'api_key',
+        'db_password',
+        'db_username',
+        'db_host',
+        'db_port',
+        'db_database',
+    ];
+
+    /**
      * Decrypt database password upon retrieval, supporting fallback for unencrypted legacy values.
      */
     public function getDbPasswordAttribute(?string $value): ?string

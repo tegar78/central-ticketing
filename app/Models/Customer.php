@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -65,5 +66,53 @@ class Customer extends Model
             ->where('no_services', $this->no_services)
             ->latest()
             ->get();
+    }
+
+    /**
+     * Scope query to customers with valid GPS coordinates.
+     */
+    public function scopeHasGpsCoordinates(Builder $query): Builder
+    {
+        return $query->whereNotNull('latitude')
+            ->where('latitude', '!=', '')
+            ->whereNotNull('longitude')
+            ->where('longitude', '!=', '')
+            ->where('latitude', '!=', '0')
+            ->where('longitude', '!=', '0');
+    }
+
+    /**
+     * Scope query to customers without valid GPS coordinates.
+     */
+    public function scopeWithoutGpsCoordinates(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->whereNull('latitude')
+              ->orWhere('latitude', '')
+              ->orWhereNull('longitude')
+              ->orWhere('longitude', '')
+              ->orWhere('latitude', '0')
+              ->orWhere('longitude', '0');
+        });
+    }
+
+    /**
+     * Scope query to search across standard customer identification columns.
+     */
+    public function scopeSearch(Builder $query, ?string $keyword): Builder
+    {
+        if (empty($keyword)) {
+            return $query;
+        }
+
+        $term = trim($keyword);
+
+        return $query->where(function (Builder $q) use ($term) {
+            $q->where('no_services', 'like', "%{$term}%")
+              ->orWhere('name', 'like', "%{$term}%")
+              ->orWhere('phone', 'like', "%{$term}%")
+              ->orWhere('address', 'like', "%{$term}%")
+              ->orWhere('odp_name', 'like', "%{$term}%");
+        });
     }
 }

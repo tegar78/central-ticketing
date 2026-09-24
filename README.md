@@ -28,6 +28,9 @@ Panduan lengkap telah disediakan pada direktori `docs/`:
 2. **[Panduan Integrasi REST API CodeIgniter 3 Billing](docs/CI3_REST_API_INTEGRATION_GUIDE.md)**  
    *Panduan teknis dan helper script untuk menghubungkan instansi billing lama berbasis CodeIgniter 3 ke sistem central-ticketing.*
 
+3. **[Panduan Koneksi & Setup Redis](docs/PANDUAN_KONEKSI_REDIS.md)**  
+   *Panduan instalasi Redis server, ekstensi phpredis, konfigurasi keamanan, isolasi database, serta pengalihan cache, antrean queue, dan sesi pengguna.*
+
 ---
 
 ## ⚡ Quick Start (Pengembangan Lokal)

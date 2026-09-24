@@ -19,33 +19,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN for Analytics & Volumes -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#ecfdf5',
-                            100: '#d1fae5',
-                            200: '#a7f3d0',
-                            300: '#6ee7b7',
-                            400: '#34d399',
-                            500: '#10b981', // Figma primary emerald
-                            600: '#059669',
-                            700: '#047857',
-                            800: '#065f46',
-                            900: '#064e3b',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
-    </style>
+    <!-- Tailwind Configuration -->
+    <script src="{{ asset('js/tailwind-config.js') }}"></script>
+    <!-- Application Stylesheet -->
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     @stack('styles')
 </head>
 <body class="bg-[#F8F9FA] dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen antialiased flex selection:bg-emerald-500/20 selection:text-emerald-700 transition-colors duration-200">

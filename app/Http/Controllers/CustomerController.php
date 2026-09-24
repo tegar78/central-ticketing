@@ -26,14 +26,7 @@ class CustomerController extends Controller
 
         // Global Search across 60 billing servers by no_services, name, phone, address, or odp_name
         if ($request->filled('search')) {
-            $search = trim($request->search);
-            $query->where(function ($q) use ($search) {
-                $q->where('no_services', 'like', "%{$search}%")
-                  ->orWhere('name', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('address', 'like', "%{$search}%")
-                  ->orWhere('odp_name', 'like', "%{$search}%");
-            });
+            $query->search($request->search);
         }
 
         // Filter by Billing Origin Node

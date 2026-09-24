@@ -8,11 +8,15 @@ use App\Models\Ticket;
 use App\Models\TicketTimeline;
 use App\Models\BillingInstance;
 use App\Models\User;
+use App\Services\TelegramService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class TicketWebController extends Controller
 {
+    public function __construct(
+        protected TelegramService $telegramService
+    ) {}
     /**
      * Store a new ticket created manually by admin/operator
      */
@@ -96,6 +100,9 @@ class TicketWebController extends Controller
             }
         }
 
+        // Kirim Notifikasi ke Grup Telegram
+        $this->telegramService->sendTicketNotification($ticket, 'ticket_created', $ticket->problem_description, $user);
+
         return back()->with('success', "Tiket {$ticketNumber} berhasil dibuat dan disinkronkan ke billing.");
     }
 
@@ -178,6 +185,9 @@ class TicketWebController extends Controller
             }
         }
 
+        // Kirim Notifikasi ke Grup Telegram
+        $this->telegramService->sendTicketNotification($ticket, 'technician_assigned', $remark, $user);
+
         return back()->with('success', "Tiket berhasil ditugaskan ke Teknisi {$technician->name}.");
     }
 
@@ -233,6 +243,9 @@ class TicketWebController extends Controller
                 \Illuminate\Support\Facades\Log::warning("Callback failed: " . $e->getMessage());
             }
         }
+
+        // Kirim Notifikasi ke Grup Telegram
+        $this->telegramService->sendTicketNotification($ticket, 'status_updated', $validated['remark'], $user);
 
         return back()->with('success', 'Status tiket berhasil diperbarui & disinkronkan ke billing.');
     }

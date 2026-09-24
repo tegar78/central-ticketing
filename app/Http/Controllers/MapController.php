@@ -20,13 +20,8 @@ class MapController extends Controller
         $billingNodeId = $request->query('billing_node_id');
         $search = $request->query('search');
 
-        // 1. Base query for customers with valid GPS coordinates
-        $mapQuery = Customer::whereNotNull('latitude')
-            ->where('latitude', '!=', '')
-            ->whereNotNull('longitude')
-            ->where('longitude', '!=', '')
-            ->where('latitude', '!=', '0')
-            ->where('longitude', '!=', '0');
+        // 1. Base query for customers with valid GPS coordinates using reusable scope
+        $mapQuery = Customer::hasGpsCoordinates();
 
         if ($status && $status !== 'all') {
             $mapQuery->where('status', $status);
@@ -37,13 +32,7 @@ class MapController extends Controller
         }
 
         if ($search) {
-            $mapQuery->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('no_services', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('address', 'like', "%{$search}%")
-                  ->orWhere('odp_name', 'like', "%{$search}%");
-            });
+            $mapQuery->search($search);
         }
 
         // Fetch marked customers for map plotting
@@ -61,50 +50,49 @@ class MapController extends Controller
             'billing_node_id',
         ])->get();
 
-        // 2. Compute counts (scoped to selected billing_node_id if set)
+        // 2. Compute counts with efficient grouped aggregation (scoped to billing_node_id if set)
         $totalCustomers = Customer::when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId))->count();
-        $markedCount = Customer::whereNotNull('latitude')
-            ->where('latitude', '!=', '')
-            ->whereNotNull('longitude')
-            ->where('longitude', '!=', '')
-            ->where('latitude', '!=', '0')
-            ->where('longitude', '!=', '0')
+        $markedCount = Customer::hasGpsCoordinates()
             ->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId))
             ->count();
         $unmarkedCount = max(0, $totalCustomers - $markedCount);
 
-        // Counts by status (scoped to billing_node_id if set)
+        // Counts by status aggregated in a single query
+        $statusCountsGroup = Customer::when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId))
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->toArray();
+
         $statusCounts = [
             'all'      => $totalCustomers,
-            'active'   => Customer::where('status', 'active')->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId))->count(),
-            'isolated' => Customer::where('status', 'isolated')->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId))->count(),
-            'inactive' => Customer::where('status', 'inactive')->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId))->count(),
-            'free'     => Customer::where('status', 'free')->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId))->count(),
+            'active'   => $statusCountsGroup['active'] ?? 0,
+            'isolated' => $statusCountsGroup['isolated'] ?? 0,
+            'inactive' => $statusCountsGroup['inactive'] ?? 0,
+            'free'     => $statusCountsGroup['free'] ?? 0,
         ];
 
-        // 3. Query for Unmarked Customers Table
+        // 3. Query for Unmarked Customers Table using reusable scope
         $unmarkedStatus = $request->query('unmarked_status');
         $unmarkedSearch = $request->query('unmarked_search');
 
-        $baseUnmarkedQuery = Customer::where(function ($q) {
-            $q->whereNull('latitude')
-              ->orWhere('latitude', '')
-              ->orWhereNull('longitude')
-              ->orWhere('longitude', '')
-              ->orWhere('latitude', '0')
-              ->orWhere('longitude', '0');
-        });
+        $baseUnmarkedQuery = Customer::withoutGpsCoordinates()
+            ->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId));
 
-        if ($billingNodeId) {
-            $baseUnmarkedQuery->where('billing_node_id', $billingNodeId);
-        }
+        $unmarkedCountsGroup = (clone $baseUnmarkedQuery)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->toArray();
+
+        $unmarkedTotal = array_sum($unmarkedCountsGroup);
 
         $unmarkedStatusCounts = [
-            'all'      => (clone $baseUnmarkedQuery)->count(),
-            'active'   => (clone $baseUnmarkedQuery)->where('status', 'active')->count(),
-            'isolated' => (clone $baseUnmarkedQuery)->where('status', 'isolated')->count(),
-            'inactive' => (clone $baseUnmarkedQuery)->where('status', 'inactive')->count(),
-            'free'     => (clone $baseUnmarkedQuery)->where('status', 'free')->count(),
+            'all'      => $unmarkedTotal,
+            'active'   => $unmarkedCountsGroup['active'] ?? 0,
+            'isolated' => $unmarkedCountsGroup['isolated'] ?? 0,
+            'inactive' => $unmarkedCountsGroup['inactive'] ?? 0,
+            'free'     => $unmarkedCountsGroup['free'] ?? 0,
         ];
 
         $unmarkedQuery = clone $baseUnmarkedQuery;
@@ -114,20 +102,17 @@ class MapController extends Controller
         }
 
         if ($unmarkedSearch) {
-            $unmarkedQuery->where(function ($q) use ($unmarkedSearch) {
-                $q->where('name', 'like', "%{$unmarkedSearch}%")
-                  ->orWhere('no_services', 'like', "%{$unmarkedSearch}%")
-                  ->orWhere('phone', 'like', "%{$unmarkedSearch}%")
-                  ->orWhere('address', 'like', "%{$unmarkedSearch}%")
-                  ->orWhere('odp_name', 'like', "%{$unmarkedSearch}%");
-            });
+            $unmarkedQuery->search($unmarkedSearch);
         }
 
         $unmarkedCustomers = $unmarkedQuery->latest('updated_at')
             ->paginate(15, ['*'], 'unmarked_page')
             ->withQueryString();
 
-        $billingInstances = BillingInstance::where('is_active', true)->get();
+        // 4. Safely query billing instances without exposing sensitive credentials (api_key, db_password, etc.)
+        $billingInstances = BillingInstance::where('is_active', true)
+            ->select(['id', 'name', 'tenant_code'])
+            ->get();
         $billingMap = $billingInstances->keyBy('id');
 
         return view('maps.index', compact(
@@ -146,18 +131,22 @@ class MapController extends Controller
 
     /**
      * Update customer GPS coordinates
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  string|int  $id
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
      */
-    public function updateCoordinates(Request $request, $id)
+    public function updateCoordinates(Request $request, string|int $id)
     {
         $request->validate([
-            'latitude'  => 'required|string|max:50',
-            'longitude' => 'required|string|max:50',
+            'latitude'  => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
         ]);
 
         $customer = Customer::findOrFail($id);
         $customer->update([
-            'latitude'  => trim($request->latitude),
-            'longitude' => trim($request->longitude),
+            'latitude'  => (string) $request->latitude,
+            'longitude' => (string) $request->longitude,
         ]);
 
         if ($request->wantsJson()) {
