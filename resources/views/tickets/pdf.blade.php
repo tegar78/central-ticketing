@@ -84,9 +84,9 @@
                 </td>
                 <td class="font-mono">{{ $ticket->customer_phone ?? '-' }}</td>
                 <td>
-                    <strong>{{ $ticket->keterangan_laporan }}</strong>
+                    <div style="font-weight: bold; color: #1e293b;">{{ $ticket->keterangan_laporan }}</div>
                     @if($ticket->action_remark && $ticket->action_remark !== '-')
-                        <div style="font-size: 8px; color: #15803d; margin-top: 2px;"><em>Action: {{ Str::limit($ticket->action_remark, 70) }}</em></div>
+                        <div style="font-size: 8px; color: #15803d; margin-top: 3px;"><strong>Action:</strong> {{ Str::limit($ticket->action_remark, 90) }}</div>
                     @endif
                 </td>
                 <td>{{ $ticket->assignedTechnician->name ?? 'Belum ditugaskan' }}</td>

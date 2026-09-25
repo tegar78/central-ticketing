@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ config('app.name', 'MANAGEMENT TICKET') }}</title>
+    <meta name="description" content="Central Ticket Support & Issue Tracking System - Multi-Tenant Billing Integration">
+    <meta name="robots" content="noindex, nofollow">
+    <title>@hasSection('title')@yield('title') - @endif{{ config('app.name', 'MANAGEMENT TICKET') }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
     <!-- Prevent FOUC: Apply dark or light class immediately -->
     <script>
@@ -13,7 +15,9 @@
             document.documentElement.classList.remove('dark');
         }
     </script>
-    <!-- Tailwind CSS CDN -->
+    <!-- Compiled Vite Assets -->
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <!-- Tailwind CSS CDN Fallback -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -48,9 +52,15 @@
                 <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-2">Main Menu</div>
                 <nav class="space-y-1">
                     <a href="{{ route('dashboard') }}" 
-                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('dashboard') && !request()->has('status') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
-                        <i class="fa-solid fa-chart-pie text-base {{ request()->routeIs('dashboard') && !request()->has('status') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('dashboard') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-chart-pie text-base {{ request()->routeIs('dashboard') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
                         <span>Dashboard</span>
+                    </a>
+
+                    <a href="{{ route('tickets.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('tickets.index') && !request()->has('status') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-ticket text-base {{ request()->routeIs('tickets.index') && !request()->has('status') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Direktori Tiket</span>
                     </a>
 
                     <a href="{{ route('maps.index') }}" 
@@ -73,6 +83,20 @@
                         <i class="fa-solid fa-user-gear text-base {{ request()->routeIs('users.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
                         <span>Kelola User</span>
                     </a>
+
+                    <a href="{{ route('backups.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('backups.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-database text-base {{ request()->routeIs('backups.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Backup Database</span>
+                    </a>
+                    @endif
+
+                    @if(in_array(auth()->user()->role, ['admin', 'operator']))
+                    <a href="{{ route('activities.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('activities.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-clock-rotate-left text-base {{ request()->routeIs('activities.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Log Aktivitas</span>
+                    </a>
                     @endif
                 </nav>
             </div>
@@ -81,7 +105,7 @@
             <div>
                 <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-2">Status Tiket</div>
                 <nav class="space-y-1">
-                    <a href="{{ route('dashboard', ['status' => 'pending']) }}" 
+                    <a href="{{ route('tickets.index', ['status' => 'pending']) }}" 
                        class="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'pending' ? 'bg-sky-50 text-sky-700 font-bold dark:bg-sky-500/10 dark:text-sky-300' : 'text-slate-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:bg-slate-800/50' }}">
                         <div class="flex items-center gap-2.5">
                             <span class="w-2 h-2 rounded-full bg-sky-500"></span>
@@ -90,7 +114,7 @@
                         <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
                     </a>
 
-                    <a href="{{ route('dashboard', ['status' => 'process']) }}" 
+                    <a href="{{ route('tickets.index', ['status' => 'process']) }}" 
                        class="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'process' ? 'bg-amber-50 text-amber-700 font-bold dark:bg-amber-500/10 dark:text-amber-300' : 'text-slate-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:bg-slate-800/50' }}">
                         <div class="flex items-center gap-2.5">
                             <span class="w-2 h-2 rounded-full bg-amber-500"></span>
@@ -99,7 +123,7 @@
                         <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
                     </a>
 
-                    <a href="{{ route('dashboard', ['status' => 'close']) }}" 
+                    <a href="{{ route('tickets.index', ['status' => 'close']) }}" 
                        class="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'close' ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-300' : 'text-slate-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:bg-slate-800/50' }}">
                         <div class="flex items-center gap-2.5">
                             <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -155,14 +179,20 @@
                     <span class="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">
                         @if(request()->routeIs('dashboard'))
                             Ticket Overview
+                        @elseif(request()->routeIs('tickets.index'))
+                            Direktori Tiket Gangguan
+                        @elseif(request()->routeIs('tickets.show'))
+                            Detail Tiket
                         @elseif(request()->routeIs('maps.*'))
                             Maps Location Pelanggan
                         @elseif(request()->routeIs('customers.*'))
                             Data Pelanggan
                         @elseif(request()->routeIs('users.*'))
                             Kelola Pengguna
-                        @elseif(request()->routeIs('tickets.show'))
-                            Detail Tiket
+                        @elseif(request()->routeIs('backups.*'))
+                            Backup Database
+                        @elseif(request()->routeIs('activities.*'))
+                            Log Aktivitas Sistem
                         @else
                             {{ config('app.name') }}
                         @endif
@@ -173,7 +203,7 @@
             <!-- Right Header: Quick Search, Controls & CTA Button -->
             <div class="flex items-center gap-2.5 sm:gap-3">
                 <!-- Search Input Bar (Desktop) -->
-                <form action="{{ route('dashboard') }}" method="GET" class="hidden md:flex items-center relative">
+                <form action="{{ route('tickets.index') }}" method="GET" class="hidden md:flex items-center relative">
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 pointer-events-none">
                         <i class="fa-solid fa-magnifying-glass text-xs"></i>
                     </span>
@@ -213,9 +243,13 @@
             </div>
 
             <nav class="space-y-1">
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('dashboard') && !request()->has('status') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('dashboard') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
                     <i class="fa-solid fa-chart-pie w-5 text-center text-emerald-500"></i>
                     <span>Dashboard</span>
+                </a>
+                <a href="{{ route('tickets.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('tickets.index') && !request()->has('status') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
+                    <i class="fa-solid fa-ticket w-5 text-center text-emerald-500"></i>
+                    <span>Direktori Tiket</span>
                 </a>
                 <a href="{{ route('maps.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('maps.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
                     <i class="fa-solid fa-map-location-dot w-5 text-center text-emerald-500"></i>
@@ -232,27 +266,37 @@
                     <i class="fa-solid fa-user-gear w-5 text-center text-emerald-500"></i>
                     <span>Kelola User</span>
                 </a>
+                <a href="{{ route('backups.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('backups.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
+                    <i class="fa-solid fa-database w-5 text-center text-emerald-500"></i>
+                    <span>Backup Database</span>
+                </a>
+                @endif
+                @if(in_array(auth()->user()->role, ['admin', 'operator']))
+                <a href="{{ route('activities.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('activities.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
+                    <i class="fa-solid fa-clock-rotate-left w-5 text-center text-emerald-500"></i>
+                    <span>Log Aktivitas</span>
+                </a>
                 @endif
 
                 <!-- Quick Ticket Status Filter in Mobile Drawer -->
                 <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
                     <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-1.5">Status Tiket</div>
                     <div class="space-y-1">
-                        <a href="{{ route('dashboard', ['status' => 'pending']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'pending' ? 'bg-sky-50 text-sky-700 font-bold dark:bg-sky-500/10 dark:text-sky-300' : 'text-slate-700 dark:text-slate-300' }}">
+                        <a href="{{ route('tickets.index', ['status' => 'pending']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'pending' ? 'bg-sky-50 text-sky-700 font-bold dark:bg-sky-500/10 dark:text-sky-300' : 'text-slate-700 dark:text-slate-300' }}">
                             <div class="flex items-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-sky-500"></span>
                                 <span>Pending (Baru)</span>
                             </div>
                             <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
                         </a>
-                        <a href="{{ route('dashboard', ['status' => 'process']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'process' ? 'bg-amber-50 text-amber-700 font-bold dark:bg-amber-500/10 dark:text-amber-300' : 'text-slate-700 dark:text-slate-300' }}">
+                        <a href="{{ route('tickets.index', ['status' => 'process']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'process' ? 'bg-amber-50 text-amber-700 font-bold dark:bg-amber-500/10 dark:text-amber-300' : 'text-slate-700 dark:text-slate-300' }}">
                             <div class="flex items-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-amber-500"></span>
                                 <span>Dalam Proses</span>
                             </div>
                             <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
                         </a>
-                        <a href="{{ route('dashboard', ['status' => 'close']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'close' ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300' }}">
+                        <a href="{{ route('tickets.index', ['status' => 'close']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'close' ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300' }}">
                             <div class="flex items-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                                 <span>Selesai (Close)</span>

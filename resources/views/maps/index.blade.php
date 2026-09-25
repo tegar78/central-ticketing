@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Peta Lokasi Pelanggan')
+
 @push('styles')
 <!-- Leaflet CSS & MarkerCluster CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -30,10 +32,12 @@
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>Ditandai: <strong class="font-bold">{{ number_format($markedCount) }}</strong></span>
             </div>
+            @if(in_array($user->role, ['admin', 'operator']))
             <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/40 text-xs font-semibold">
                 <span class="w-2 h-2 rounded-full bg-amber-500"></span>
                 <span>Belum Ditandai: <strong class="font-bold">{{ number_format($unmarkedCount) }}</strong></span>
             </div>
+            @endif
         </div>
     </div>
 
@@ -106,6 +110,7 @@
                 <i class="fa-solid fa-layer-group text-sky-500"></i> <span id="layerNameText">Satelit</span>
             </button>
 
+            @if(in_array($user->role, ['admin', 'operator']))
             <!-- Sync Data Button -->
             <form action="{{ route('customers.syncBilling') }}" method="POST" class="inline">
                 @csrf
@@ -119,6 +124,7 @@
                     <i class="fa-solid fa-rotate"></i> Sync Tabel
                 </button>
             </form>
+            @endif
         </div>
     </div>
 
@@ -150,7 +156,8 @@
         </div>
     </div>
 
-    <!-- Bottom Section: Data Pelanggan yang Belum Ditandai Maps (billtest layout) -->
+    @if(in_array($user->role, ['admin', 'operator']))
+    {{-- Bottom Section: Data Pelanggan yang Belum Ditandai Maps (Hanya Admin & Operator) --}}
     <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden transition-colors">
         <!-- Card Header -->
         <div class="p-5 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -381,6 +388,7 @@
         </form>
     </div>
 </div>
+@endif
 
 <!-- Raw Customer Data for Leaflet (JSON parsed safely to prevent linter errors) -->
 <script type="application/json" id="customersData">

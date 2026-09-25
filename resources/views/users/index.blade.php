@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Kelola Pengguna')
+
 @section('content')
 <div class="space-y-6">
     <!-- Header Section -->

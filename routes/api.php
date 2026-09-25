@@ -11,8 +11,8 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-// Central Ticket System API for 60 Billing Instances
-Route::prefix('v1')->middleware(CheckTenantApiKey::class)->group(function () {
+// Central Ticket System API for 60 Billing Instances (Rate Limited to 120 req/min)
+Route::prefix('v1')->middleware([CheckTenantApiKey::class, 'throttle:120,1'])->group(function () {
     Route::post('/tickets', [TicketApiController::class, 'store']);
     Route::get('/tickets', [TicketApiController::class, 'list']);
     Route::get('/tickets/{id}', [TicketApiController::class, 'show']);

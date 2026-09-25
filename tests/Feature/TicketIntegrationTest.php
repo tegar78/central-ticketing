@@ -104,7 +104,7 @@ class TicketIntegrationTest extends TestCase
         // Login as Tech 1
         $this->actingAs($tech1);
 
-        $response = $this->get('/dashboard');
+        $response = $this->get('/tickets');
         $response->assertStatus(200);
         $response->assertSee('Customer Tech 1');
         $response->assertDontSee('Customer Tech 2');

@@ -8,8 +8,10 @@ use App\Models\Ticket;
 use App\Models\TicketTimeline;
 use App\Models\BillingInstance;
 use App\Models\User;
+use App\Models\Customer;
 use App\Services\TelegramService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class TicketWebController extends Controller
@@ -17,6 +19,71 @@ class TicketWebController extends Controller
     public function __construct(
         protected TelegramService $telegramService
     ) {}
+
+    /**
+     * Display centralized tickets directory with search, filters & export options
+     */
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+
+        $query = Ticket::with(['billingInstance', 'assignedTechnician']);
+
+        // Role scoping: technician only sees assigned tickets
+        if ($user->role === 'technician') {
+            $query->where('assigned_technician_id', $user->id);
+        } else {
+            if ($request->filled('billing_instance_id')) {
+                $query->where('billing_instance_id', $request->billing_instance_id);
+            }
+            if ($request->filled('technician_id')) {
+                $query->where('assigned_technician_id', $request->technician_id);
+            }
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('ticket_number', 'like', "%{$search}%")
+                  ->orWhere('customer_name', 'like', "%{$search}%")
+                  ->orWhere('no_services', 'like', "%{$search}%");
+            });
+        }
+
+        $tickets = $query->latest()->paginate(15)->withQueryString();
+
+        // Calculate counts for quick status navigation pills
+        $baseCountQuery = Ticket::query();
+        if ($user->role === 'technician') {
+            $baseCountQuery->where('assigned_technician_id', $user->id);
+        }
+
+        $pendingCount = (clone $baseCountQuery)->where('status', 'pending')->count();
+        $processCount = (clone $baseCountQuery)->where('status', 'process')->count();
+        $closeCount = (clone $baseCountQuery)->where('status', 'close')->count();
+        $totalCount = (clone $baseCountQuery)->count();
+
+        $tenants = BillingInstance::where('is_active', true)->get();
+        $technicians = User::where('role', 'technician')->where('is_active', true)->get();
+        $totalCustomersCount = Customer::count();
+
+        return view('tickets.index', compact(
+            'user',
+            'tickets',
+            'pendingCount',
+            'processCount',
+            'closeCount',
+            'totalCount',
+            'tenants',
+            'technicians',
+            'totalCustomersCount'
+        ));
+    }
+
     /**
      * Store a new ticket created manually by admin/operator
      */
@@ -58,11 +125,13 @@ class TicketWebController extends Controller
             'created_by_role' => $user->role,
         ]);
 
+        $deviceInfo = $this->getClientDeviceInfo($request);
+
         TicketTimeline::create([
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'status' => 'pending',
-            'remark' => "Tiket dibuat manual oleh {$user->name} ({$user->role})",
+            'remark' => "Tambah Tiket Gangguan dari {$deviceInfo}",
         ]);
 
         // Webhook callback to CI Billing Instance (e.g. billingtest.gayuh.net.id.test)
@@ -149,13 +218,19 @@ class TicketWebController extends Controller
         ]);
 
         $ticket = Ticket::findOrFail($id);
+
+        if ($ticket->isClosed()) {
+            return back()->with('error', 'Tiket ini telah berstatus Selesai (Closed) dan terkunci. Penugasan teknisi tidak dapat diubah lagi.');
+        }
+
         $technician = User::findOrFail($request->technician_id);
 
         $ticket->update([
             'assigned_technician_id' => $technician->id,
         ]);
 
-        $remark = "Ditugaskan ke teknisi: {$technician->name} oleh {$user->name} ({$user->role})";
+        $deviceInfo = $this->getClientDeviceInfo($request);
+        $remark = "Ditugaskan ke teknisi: {$technician->name} dari {$deviceInfo}";
 
         TicketTimeline::create([
             'ticket_id' => $ticket->id,
@@ -203,6 +278,10 @@ class TicketWebController extends Controller
         $user = Auth::user();
         $ticket = Ticket::findOrFail($id);
 
+        if ($ticket->isClosed()) {
+            return back()->with('error', 'Tiket ini telah berstatus Selesai (Closed) dan terkunci. Status tidak dapat diperbarui lagi.');
+        }
+
         if ($user->role === 'technician' && $ticket->assigned_technician_id !== $user->id) {
             abort(403, 'Anda tidak memiliki akses ke tiket ini.');
         }
@@ -216,11 +295,16 @@ class TicketWebController extends Controller
             'status' => $validated['status'],
         ]);
 
+        $deviceInfo = $this->getClientDeviceInfo($request);
+        $statusLabels = ['pending' => 'Pending', 'process' => 'Dalam Proses', 'close' => 'Selesai (Close)'];
+        $statusLabel = $statusLabels[$validated['status']] ?? $validated['status'];
+        $remarkText = "Ubah status ke {$statusLabel}: {$validated['remark']} dari {$deviceInfo}";
+
         TicketTimeline::create([
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'status' => $validated['status'],
-            'remark' => $validated['remark'],
+            'remark' => $remarkText,
         ]);
 
         // Webhook callback to CI Billing Instance
@@ -248,6 +332,36 @@ class TicketWebController extends Controller
         $this->telegramService->sendTicketNotification($ticket, 'status_updated', $validated['remark'], $user);
 
         return back()->with('success', 'Status tiket berhasil diperbarui & disinkronkan ke billing.');
+    }
+
+    /**
+     * Get formatted client OS, IP address, and browser matching Billing reference
+     */
+    protected function getClientDeviceInfo(Request $request): string
+    {
+        $ua = $request->userAgent() ?? '';
+        $ip = $request->ip() ?? '127.0.0.1';
+
+        $os = 'Windows';
+        if (str_contains($ua, 'Windows NT 10.0')) $os = 'Windows 10';
+        elseif (str_contains($ua, 'Windows NT 11.0')) $os = 'Windows 11';
+        elseif (str_contains($ua, 'Android')) $os = 'Android';
+        elseif (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) $os = 'iOS';
+        elseif (str_contains($ua, 'Macintosh')) $os = 'MacOS';
+        elseif (str_contains($ua, 'Linux')) $os = 'Linux';
+
+        $browser = 'Chrome 153.0.0.0';
+        if (preg_match('/Chrome\/([0-9\.]+)/i', $ua, $matches)) {
+            $browser = 'Chrome ' . $matches[1];
+        } elseif (preg_match('/Edg\/([0-9\.]+)/i', $ua, $matches)) {
+            $browser = 'Edge ' . $matches[1];
+        } elseif (preg_match('/Firefox\/([0-9\.]+)/i', $ua, $matches)) {
+            $browser = 'Firefox ' . $matches[1];
+        } elseif (preg_match('/Safari\/([0-9\.]+)/i', $ua, $matches)) {
+            $browser = 'Safari ' . $matches[1];
+        }
+
+        return "{$os} {$ip} {$browser}";
     }
 
     /**

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Detail Tiket #' . $ticket->ticket_number)
+
 @section('content')
 <div class="space-y-6">
     <!-- Back Header & Status -->
@@ -178,7 +180,7 @@
                     </div>
                 @endif
 
-                @if($user->role !== 'technician')
+                @if(!$ticket->isClosed() && $user->role !== 'technician')
                     <!-- Form Assign Technician -->
                     <form action="{{ route('tickets.assign', $ticket->id) }}" method="POST" class="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
                         @csrf
@@ -195,38 +197,81 @@
                             <i class="fa-solid fa-user-check"></i> Simpan Penugasan
                         </button>
                     </form>
+                @elseif($ticket->isClosed())
+                    <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl">
+                        <i class="fa-solid fa-lock text-slate-400 text-xs"></i>
+                        <span>Penugasan terkunci karena tiket telah selesai.</span>
+                    </div>
                 @endif
             </div>
 
-            <!-- Update Status & Remark Box -->
-            <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4 transition-colors">
-                <h3 class="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                    <i class="fa-solid fa-pen-to-square text-emerald-600 dark:text-emerald-400"></i>
-                    <span>Perbarui Status Tiket</span>
-                </h3>
-
-                <form action="{{ route('tickets.updateStatus', $ticket->id) }}" method="POST" class="space-y-4">
-                    @csrf
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-slate-600 dark:text-slate-400 mb-1">Status Baru</label>
-                        <select name="status" required class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
-                            <option value="pending" {{ $ticket->status === 'pending' ? 'selected' : '' }}>Pending (Menunggu)</option>
-                            <option value="process" {{ $ticket->status === 'process' ? 'selected' : '' }}>Process (Sedang Dikerjakan)</option>
-                            <option value="close" {{ $ticket->status === 'close' ? 'selected' : '' }}>Close (Selesai)</option>
-                        </select>
+            @if($ticket->isClosed())
+                <!-- Locked State Card: Tiket Selesai (Closed) -->
+                <div class="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/50 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4 transition-colors">
+                    <div class="flex items-center gap-2.5 border-b border-emerald-200/60 dark:border-emerald-800/40 pb-3">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-sm shadow-sm">
+                            <i class="fa-solid fa-lock"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-extrabold text-emerald-900 dark:text-emerald-300 text-sm">
+                                Tiket Selesai & Terkunci
+                            </h3>
+                            <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
+                                Status Closed Permanen
+                            </span>
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-slate-600 dark:text-slate-400 mb-1">Catatan Penanganan</label>
-                        <textarea name="remark" rows="3" required placeholder="Contoh: Kabel FO telah disambung kembali..."
-                                  class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"></textarea>
-                    </div>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        Seluruh tindakan penanganan gangguan pada tiket ini telah diselesaikan dan diarsipkan. Status dan catatan penanganan tidak dapat diperbarui lagi.
+                    </p>
 
-                    <button type="submit" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-floppy-disk"></i> Simpan & Sinkronkan ke Billing
-                    </button>
-                </form>
-            </div>
+                    @if($ticket->closed_at)
+                    <div class="p-3.5 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-xs space-y-1.5">
+                        <div class="text-[10px] font-bold uppercase text-slate-400">Waktu Penyelesaian:</div>
+                        <div class="font-semibold text-slate-800 dark:text-slate-200 font-mono text-xs">
+                            {{ $ticket->closed_at->format('d M Y - H:i:s') }} WIB
+                        </div>
+                        @if($ticket->action_remark && $ticket->action_remark !== '-')
+                        <div class="text-[10px] font-bold uppercase text-slate-400 pt-1.5 mt-1.5 border-t border-slate-100 dark:border-slate-800">Catatan Akhir:</div>
+                        <div class="text-slate-700 dark:text-slate-300 italic text-[11px]">
+                            "{{ $ticket->action_remark }}"
+                        </div>
+                        @endif
+                    </div>
+                    @endif
+                </div>
+            @else
+                <!-- Form Update Status & Remark Box (Hanya Jika Belum Closed) -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4 transition-colors">
+                    <h3 class="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                        <i class="fa-solid fa-pen-to-square text-emerald-600 dark:text-emerald-400"></i>
+                        <span>Perbarui Status Tiket</span>
+                    </h3>
+
+                    <form action="{{ route('tickets.updateStatus', $ticket->id) }}" method="POST" class="space-y-4">
+                        @csrf
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-slate-600 dark:text-slate-400 mb-1">Status Baru</label>
+                            <select name="status" required class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                                <option value="pending" {{ $ticket->status === 'pending' ? 'selected' : '' }}>Pending (Menunggu)</option>
+                                <option value="process" {{ $ticket->status === 'process' ? 'selected' : '' }}>Process (Sedang Dikerjakan)</option>
+                                <option value="close" {{ $ticket->status === 'close' ? 'selected' : '' }}>Close (Selesai)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-slate-600 dark:text-slate-400 mb-1">Catatan Penanganan</label>
+                            <textarea name="remark" rows="3" required placeholder="Contoh: Kabel FO telah disambung kembali..."
+                                      class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-floppy-disk"></i> Simpan & Sinkronkan ke Billing
+                        </button>
+                    </form>
+                </div>
+            @endif
         </div>
     </div>
 </div>

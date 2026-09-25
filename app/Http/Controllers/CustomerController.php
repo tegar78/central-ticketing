@@ -83,6 +83,60 @@ class CustomerController extends Controller
     }
 
     /**
+     * Fast AJAX Live Search for Customer Autocomplete in Modals
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function liveSearch(Request $request)
+    {
+        $q = trim($request->get('q', ''));
+        $billingId = $request->get('billing_id');
+
+        if (empty($q) && empty($billingId)) {
+            return response()->json([
+                'total' => 0,
+                'customers' => []
+            ]);
+        }
+
+        $query = Customer::query();
+
+        if (!empty($billingId) && $billingId !== 'all') {
+            $query->where('billing_node_id', $billingId);
+        }
+
+        if (!empty($q)) {
+            $query->where(function ($sq) use ($q) {
+                $sq->where('no_services', 'like', "%{$q}%")
+                   ->orWhere('name', 'like', "%{$q}%")
+                   ->orWhere('phone', 'like', "%{$q}%")
+                   ->orWhere('odp_name', 'like', "%{$q}%");
+            });
+        }
+
+        $customers = $query->limit(20)->get()->map(function ($cust) {
+            return [
+                'no_services'         => $cust->no_services,
+                'customer_name'       => $cust->name,
+                'customer_phone'      => $cust->phone ?? '-',
+                'customer_address'    => trim($cust->address ?? ''),
+                'billing_instance_id' => $cust->billing_node_id,
+                'status'              => ucfirst($cust->status ?? 'Active'),
+                'package_name'        => $cust->package_name ?? 'Regular',
+                'odp_name'            => $cust->odp_name ?? '-',
+                'latitude'            => $cust->latitude,
+                'longitude'           => $cust->longitude,
+            ];
+        });
+
+        return response()->json([
+            'total' => $customers->count(),
+            'customers' => $customers
+        ]);
+    }
+
+    /**
      * Get customers for modal dropdown from remote Billing Instance API or local database fallback
      *
      * @param string|int $id
@@ -118,6 +172,8 @@ class CustomerController extends Controller
                             'status'              => ucfirst($cust->status ?? 'Active'),
                             'package_name'        => $cust->package_name ?? 'Regular',
                             'odp_name'            => $cust->odp_name,
+                            'latitude'            => $cust->latitude,
+                            'longitude'           => $cust->longitude,
                         ];
                     }
                     $source = 'local_synced_api';

@@ -72,42 +72,53 @@ class MapController extends Controller
             'free'     => $statusCountsGroup['free'] ?? 0,
         ];
 
-        // 3. Query for Unmarked Customers Table using reusable scope
-        $unmarkedStatus = $request->query('unmarked_status');
-        $unmarkedSearch = $request->query('unmarked_search');
-
-        $baseUnmarkedQuery = Customer::withoutGpsCoordinates()
-            ->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId));
-
-        $unmarkedCountsGroup = (clone $baseUnmarkedQuery)
-            ->selectRaw('status, count(*) as total')
-            ->groupBy('status')
-            ->pluck('total', 'status')
-            ->toArray();
-
-        $unmarkedTotal = array_sum($unmarkedCountsGroup);
-
+        // 3. Query for Unmarked Customers Table (Hanya untuk Admin & Operator; Teknisi tidak perlu tandai map)
+        $unmarkedCustomers = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15);
         $unmarkedStatusCounts = [
-            'all'      => $unmarkedTotal,
-            'active'   => $unmarkedCountsGroup['active'] ?? 0,
-            'isolated' => $unmarkedCountsGroup['isolated'] ?? 0,
-            'inactive' => $unmarkedCountsGroup['inactive'] ?? 0,
-            'free'     => $unmarkedCountsGroup['free'] ?? 0,
+            'all'      => 0,
+            'active'   => 0,
+            'isolated' => 0,
+            'inactive' => 0,
+            'free'     => 0,
         ];
 
-        $unmarkedQuery = clone $baseUnmarkedQuery;
+        if (in_array($user->role, ['admin', 'operator'])) {
+            $unmarkedStatus = $request->query('unmarked_status');
+            $unmarkedSearch = $request->query('unmarked_search');
 
-        if ($unmarkedStatus && $unmarkedStatus !== 'all') {
-            $unmarkedQuery->where('status', $unmarkedStatus);
+            $baseUnmarkedQuery = Customer::withoutGpsCoordinates()
+                ->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId));
+
+            $unmarkedCountsGroup = (clone $baseUnmarkedQuery)
+                ->selectRaw('status, count(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->toArray();
+
+            $unmarkedTotal = array_sum($unmarkedCountsGroup);
+
+            $unmarkedStatusCounts = [
+                'all'      => $unmarkedTotal,
+                'active'   => $unmarkedCountsGroup['active'] ?? 0,
+                'isolated' => $unmarkedCountsGroup['isolated'] ?? 0,
+                'inactive' => $unmarkedCountsGroup['inactive'] ?? 0,
+                'free'     => $unmarkedCountsGroup['free'] ?? 0,
+            ];
+
+            $unmarkedQuery = clone $baseUnmarkedQuery;
+
+            if ($unmarkedStatus && $unmarkedStatus !== 'all') {
+                $unmarkedQuery->where('status', $unmarkedStatus);
+            }
+
+            if ($unmarkedSearch) {
+                $unmarkedQuery->search($unmarkedSearch);
+            }
+
+            $unmarkedCustomers = $unmarkedQuery->latest('updated_at')
+                ->paginate(15, ['*'], 'unmarked_page')
+                ->withQueryString();
         }
-
-        if ($unmarkedSearch) {
-            $unmarkedQuery->search($unmarkedSearch);
-        }
-
-        $unmarkedCustomers = $unmarkedQuery->latest('updated_at')
-            ->paginate(15, ['*'], 'unmarked_page')
-            ->withQueryString();
 
         // 4. Safely query billing instances without exposing sensitive credentials (api_key, db_password, etc.)
         $billingInstances = BillingInstance::where('is_active', true)
@@ -138,6 +149,10 @@ class MapController extends Controller
      */
     public function updateCoordinates(Request $request, string|int $id)
     {
+        $user = Auth::user();
+        if ($user->role === 'technician') {
+            abort(403, 'Akses ditolak. Teknisi tidak memiliki izin untuk menandai atau mengubah titik koordinat GPS pelanggan.');
+        }
         $request->validate([
             'latitude'  => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
