@@ -9,6 +9,7 @@ use App\Http\Controllers\TicketExportController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\MapController;
+use App\Http\Controllers\OdpController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -44,6 +45,15 @@ Route::middleware('auth')->group(function () {
 
     // Maps Location Pelanggan (Synchronized from Billtest)
     Route::get('/maps', [MapController::class, 'index'])->name('maps.index');
+
+    // Maps & Management ODP (Optical Distribution Point)
+    Route::get('/maps/odp', [OdpController::class, 'index'])->name('odp.index');
+    Route::post('/maps/odp', [OdpController::class, 'store'])->name('odp.store');
+    Route::get('/maps/odp/{id}', [OdpController::class, 'show'])->name('odp.show');
+    Route::post('/maps/odp/{id}', [OdpController::class, 'update'])->name('odp.update');
+    Route::delete('/maps/odp/{id}', [OdpController::class, 'destroy'])->name('odp.destroy');
+    Route::post('/maps/odp/{id}/photo', [OdpController::class, 'uploadPhoto'])->name('odp.uploadPhoto');
+    Route::post('/maps/odp/sync-customers', [OdpController::class, 'syncFromCustomers'])->name('odp.syncCustomers');
 
     // System Activity Logs
     Route::get('/activities', [\App\Http\Controllers\ActivityLogController::class, 'index'])->name('activities.index');

@@ -58,6 +58,14 @@ class Customer extends Model
     }
 
     /**
+     * Relationship to ODP master data
+     */
+    public function odp(): BelongsTo
+    {
+        return $this->belongsTo(Odp::class, 'odp_name', 'code_odp');
+    }
+
+    /**
      * Get tickets strictly scoped to this customer's billing node to prevent cross-tenant leakage
      */
     public function scopedTickets()

@@ -64,9 +64,15 @@
                     </a>
 
                     <a href="{{ route('maps.index') }}" 
-                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('maps.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
-                        <i class="fa-solid fa-map-location-dot text-base {{ request()->routeIs('maps.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('maps.index') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-map-location-dot text-base {{ request()->routeIs('maps.index') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
                         <span>Maps Pelanggan</span>
+                    </a>
+
+                    <a href="{{ route('odp.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all {{ request()->routeIs('odp.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-network-wired text-base {{ request()->routeIs('odp.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Maps ODP</span>
                     </a>
 
                     @if(in_array(auth()->user()->role, ['admin', 'operator']))
@@ -185,6 +191,8 @@
                             Detail Tiket
                         @elseif(request()->routeIs('maps.*'))
                             Maps Location Pelanggan
+                        @elseif(request()->routeIs('odp.*'))
+                            Maps ODP & Infrastruktur
                         @elseif(request()->routeIs('customers.*'))
                             Data Pelanggan
                         @elseif(request()->routeIs('users.*'))
@@ -251,9 +259,13 @@
                     <i class="fa-solid fa-ticket w-5 text-center text-emerald-500"></i>
                     <span>Direktori Tiket</span>
                 </a>
-                <a href="{{ route('maps.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('maps.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
+                <a href="{{ route('maps.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('maps.index') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
                     <i class="fa-solid fa-map-location-dot w-5 text-center text-emerald-500"></i>
                     <span>Maps Pelanggan</span>
+                </a>
+                <a href="{{ route('odp.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('odp.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
+                    <i class="fa-solid fa-network-wired w-5 text-center text-emerald-500"></i>
+                    <span>Maps ODP</span>
                 </a>
                 @if(in_array(auth()->user()->role, ['admin', 'operator']))
                 <a href="{{ route('customers.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('customers.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
