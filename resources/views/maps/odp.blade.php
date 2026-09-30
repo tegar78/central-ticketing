@@ -218,15 +218,38 @@
                 </div>
             </div>
 
-            <!-- Search Form -->
-            <form action="{{ route('odp.index') }}" method="GET" class="flex items-center gap-2">
+            <!-- Search & Sort Form -->
+            <form action="{{ route('odp.index') }}" method="GET" class="flex flex-wrap items-center gap-2">
                 @if(request('status'))
                     <input type="hidden" name="status" value="{{ request('status') }}">
                 @endif
                 @if(request('billing_node_id'))
                     <input type="hidden" name="billing_node_id" value="{{ request('billing_node_id') }}">
                 @endif
-                <div class="relative w-full sm:w-64">
+
+                <!-- Sorting Dropdown (Nama ODP Ascending & Descending) -->
+                <div class="relative">
+                    <select name="sort" onchange="this.form.submit()" class="pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
+                        <option value="name_asc" {{ ($sortBy === 'name' && $sortDir === 'asc') ? 'selected' : '' }}>
+                            Nama ODP: A → Z (Ascending)
+                        </option>
+                        <option value="name_desc" {{ ($sortBy === 'name' && $sortDir === 'desc') ? 'selected' : '' }}>
+                            Nama ODP: Z → A (Descending)
+                        </option>
+                        <option value="code_odp_asc" {{ ($sortBy === 'code_odp' && $sortDir === 'asc') ? 'selected' : '' }}>
+                            Kode ODP: A → Z (Ascending)
+                        </option>
+                        <option value="code_odp_desc" {{ ($sortBy === 'code_odp' && $sortDir === 'desc') ? 'selected' : '' }}>
+                            Kode ODP: Z → A (Descending)
+                        </option>
+                        <option value="updated_at_desc" {{ ($sortBy === 'updated_at') ? 'selected' : '' }}>
+                            Terbaru Diperbarui
+                        </option>
+                    </select>
+                    <i class="fa-solid fa-arrow-down-short-wide absolute left-2.5 top-2.5 text-slate-400 text-xs pointer-events-none"></i>
+                </div>
+
+                <div class="relative w-full sm:w-60">
                     <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari kode ODP, alamat, nama..." 
                            class="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500">
                     <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
@@ -234,8 +257,8 @@
                 <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold">
                     Cari
                 </button>
-                @if(request('search'))
-                <a href="{{ route('odp.index', request()->only(['status', 'billing_node_id'])) }}" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs">
+                @if(request('search') || request('sort') || request('sort_by'))
+                <a href="{{ route('odp.index', request()->only(['status', 'billing_node_id'])) }}" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs" title="Reset pencarian dan urutan">
                     Reset
                 </a>
                 @endif
@@ -249,7 +272,29 @@
                     <tr>
                         <th class="px-4 py-3 text-center w-12">No</th>
                         <th class="px-4 py-3">Foto</th>
-                        <th class="px-4 py-3">Kode ODP</th>
+                        <th class="px-4 py-3">
+                            <div class="flex items-center gap-2">
+                                <a href="{{ route('odp.index', array_merge(request()->query(), [
+                                    'sort_by' => 'name',
+                                    'sort_dir' => ($sortBy === 'name' && $sortDir === 'asc') ? 'desc' : 'asc'
+                                ])) }}" class="inline-flex items-center gap-1 font-bold transition-colors {{ $sortBy === 'name' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white' }}" title="Urutkan berdasarkan Nama ODP (Klik untuk toggle Ascending / Descending)">
+                                    <span>Nama & Kode ODP</span>
+                                    @if($sortBy === 'name')
+                                        <i class="fa-solid fa-arrow-{{ $sortDir === 'asc' ? 'up-a-z' : 'down-z-a' }} text-xs text-emerald-600 dark:text-emerald-400"></i>
+                                    @elseif($sortBy === 'code_odp')
+                                        <i class="fa-solid fa-arrow-{{ $sortDir === 'asc' ? 'up-1-9' : 'down-9-1' }} text-xs text-sky-600 dark:text-sky-400" title="Sedang diurutkan berdasarkan Kode ODP"></i>
+                                    @else
+                                        <i class="fa-solid fa-sort text-[10px] text-slate-400 opacity-60"></i>
+                                    @endif
+                                </a>
+                                <a href="{{ route('odp.index', array_merge(request()->query(), [
+                                    'sort_by' => 'code_odp',
+                                    'sort_dir' => ($sortBy === 'code_odp' && $sortDir === 'asc') ? 'desc' : 'asc'
+                                ])) }}" class="px-1.5 py-0.5 rounded text-[9px] font-mono border transition-all {{ $sortBy === 'code_odp' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 hover:border-slate-300' }}" title="Sort Kode ODP ({{ $sortBy === 'code_odp' ? strtoupper($sortDir) : 'A-Z' }})">
+                                    Kode {{ $sortBy === 'code_odp' ? ($sortDir === 'asc' ? '↑' : '↓') : '↕' }}
+                                </a>
+                            </div>
+                        </th>
                         <th class="px-4 py-3">Server Billing</th>
                         <th class="px-4 py-3">Kapasitas Port</th>
                         <th class="px-4 py-3 text-center">Status</th>

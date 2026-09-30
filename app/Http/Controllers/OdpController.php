@@ -85,8 +85,48 @@ class OdpController extends Controller
             $tableQuery->search($search);
         }
 
-        $odpList = $tableQuery->latest('updated_at')
-            ->paginate(15)
+        // 3. Sorting & Pagination (Ascending & Descending by Nama / Kode ODP)
+        $sortBy = $request->query('sort_by', 'name');
+        $sortDir = strtolower($request->query('sort_dir', 'asc'));
+
+        // Support combined sort param if provided, e.g. sort=name_asc or sort=name_desc
+        if ($request->filled('sort')) {
+            $parts = explode('_', $request->query('sort'));
+            $dir = array_pop($parts);
+            if (in_array($dir, ['asc', 'desc'])) {
+                $sortDir = $dir;
+                $sortBy = implode('_', $parts);
+            }
+        }
+
+        if (!in_array($sortDir, ['asc', 'desc'])) {
+            $sortDir = 'asc';
+        }
+
+        $allowedSorts = ['name', 'code_odp', 'status', 'total_ports', 'used_ports', 'updated_at', 'created_at'];
+        if (!in_array($sortBy, $allowedSorts)) {
+            $sortBy = 'name';
+        }
+
+        if ($sortBy === 'name') {
+            // Natural alphanumeric sort on ODP name (e.g. ODP A1, ODP A2 ... ODP A10)
+            if ($sortDir === 'desc') {
+                $tableQuery->orderByRaw("REGEXP_SUBSTR(COALESCE(NULLIF(name, ''), code_odp), '^[A-Za-z -]+') DESC, CAST(REGEXP_SUBSTR(COALESCE(NULLIF(name, ''), code_odp), '[0-9]+') AS UNSIGNED) DESC, name DESC");
+            } else {
+                $tableQuery->orderByRaw("REGEXP_SUBSTR(COALESCE(NULLIF(name, ''), code_odp), '^[A-Za-z -]+') ASC, CAST(REGEXP_SUBSTR(COALESCE(NULLIF(name, ''), code_odp), '[0-9]+') AS UNSIGNED) ASC, name ASC");
+            }
+        } elseif ($sortBy === 'code_odp') {
+            // Natural alphanumeric sort on code_odp (e.g. ODP-A1, ODP-A2 ... ODP-A10)
+            if ($sortDir === 'desc') {
+                $tableQuery->orderByRaw("REGEXP_SUBSTR(code_odp, '^[A-Za-z-]+') DESC, CAST(REGEXP_SUBSTR(code_odp, '[0-9]+') AS UNSIGNED) DESC, code_odp DESC");
+            } else {
+                $tableQuery->orderByRaw("REGEXP_SUBSTR(code_odp, '^[A-Za-z-]+') ASC, CAST(REGEXP_SUBSTR(code_odp, '[0-9]+') AS UNSIGNED) ASC, code_odp ASC");
+            }
+        } else {
+            $tableQuery->orderBy($sortBy, $sortDir);
+        }
+
+        $odpList = $tableQuery->paginate(15)
             ->withQueryString();
 
         // 4. Safe billing instance list
@@ -120,7 +160,9 @@ class OdpController extends Controller
             'odpList',
             'billingInstances',
             'billingMap',
-            'unregisteredOdpCount'
+            'unregisteredOdpCount',
+            'sortBy',
+            'sortDir'
         ));
     }
 
