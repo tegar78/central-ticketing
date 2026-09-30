@@ -135,18 +135,6 @@ class OdpController extends Controller
             ->get();
         $billingMap = $billingInstances->keyBy('id');
 
-        // Check if there are customers with odp_name that are not yet in odps table
-        $unregisteredOdpCount = 0;
-        if (in_array($user->role, ['admin', 'operator'])) {
-            $existingOdpCodes = Odp::pluck('code_odp')->toArray();
-            $unregisteredOdpCount = Customer::whereNotNull('odp_name')
-                ->where('odp_name', '!=', '')
-                ->where('odp_name', '!=', '-')
-                ->whereNotIn('odp_name', $existingOdpCodes)
-                ->distinct('odp_name')
-                ->count('odp_name');
-        }
-
         return view('maps.odp', compact(
             'user',
             'markedOdps',
@@ -160,7 +148,6 @@ class OdpController extends Controller
             'odpList',
             'billingInstances',
             'billingMap',
-            'unregisteredOdpCount',
             'sortBy',
             'sortDir'
         ));
@@ -381,72 +368,253 @@ class OdpController extends Controller
     }
 
     /**
-     * Auto-sync ODP records from existing customer data
+     * Get port allocation matrix and connected customers for an ODP
      */
-    public function syncFromCustomers(Request $request)
+    public function ports(int $id)
     {
         $user = Auth::user();
-        if (in_array($user->role, ['technician'])) {
-            abort(403, 'Akses ditolak.');
+        $odp = Odp::with(['billingNode:id,name,tenant_code'])->findOrFail($id);
+        $matrix = $odp->getPortMatrix();
+
+        return response()->json([
+            'success'   => true,
+            'odp'       => [
+                'id'           => $odp->id,
+                'code_odp'     => $odp->code_odp,
+                'name'         => $odp->name,
+                'total_ports'  => $odp->total_ports,
+                'used_ports'   => $matrix['used_ports_count'],
+                'status'       => $odp->status,
+                'billing_node' => $odp->billingNode,
+            ],
+            'ports'      => $matrix['ports'],
+            'unassigned' => $matrix['unassigned'],
+            'can_edit'   => in_array($user->role, ['admin', 'operator']),
+            'user_role'  => $user->role,
+        ]);
+    }
+
+    /**
+     * Live search customers from the same billing node to assign to a port
+     */
+    public function searchAvailableCustomers(Request $request, int $id)
+    {
+        $odp = Odp::findOrFail($id);
+        $q = trim($request->query('q', ''));
+
+        $query = Customer::query();
+
+        if ($odp->billing_node_id) {
+            $query->where('billing_node_id', $odp->billing_node_id);
         }
 
-        $billingNodeId = $request->input('billing_node_id');
-
-        // Query distinct odp_name with average coordinates from customers table
-        $query = Customer::whereNotNull('odp_name')
-            ->where('odp_name', '!=', '')
-            ->where('odp_name', '!=', '-');
-
-        if ($billingNodeId) {
-            $query->where('billing_node_id', $billingNodeId);
+        if (!empty($q)) {
+            $query->where(function ($sq) use ($q) {
+                $sq->where('name', 'like', "%{$q}%")
+                   ->orWhere('no_services', 'like', "%{$q}%")
+                   ->orWhere('phone', 'like', "%{$q}%")
+                   ->orWhere('address', 'like', "%{$q}%");
+            });
         }
 
-        $customerOdps = $query->select([
-            'billing_node_id',
-            'odp_name',
-            DB::raw('COUNT(id) as total_customers'),
-            DB::raw('AVG(CASE WHEN latitude IS NOT NULL AND latitude != "" AND latitude != "0" THEN CAST(latitude AS DECIMAL(10,7)) END) as avg_lat'),
-            DB::raw('AVG(CASE WHEN longitude IS NOT NULL AND longitude != "" AND longitude != "0" THEN CAST(longitude AS DECIMAL(10,7)) END) as avg_lng'),
+        $customers = $query->select([
+            'id', 'billing_node_id', 'remote_customer_id', 'no_services', 'name', 'phone', 'address', 'status', 'package_name', 'odp_name', 'port_number'
         ])
-        ->groupBy('billing_node_id', 'odp_name')
+        ->orderByRaw("CASE WHEN odp_name = ? THEN 0 ELSE 1 END", [$odp->code_odp])
+        ->latest('updated_at')
+        ->limit(25)
         ->get();
 
-        $createdCount = 0;
-        $updatedCount = 0;
+        return response()->json([
+            'success'   => true,
+            'customers' => $customers,
+        ]);
+    }
 
-        foreach ($customerOdps as $item) {
-            $existing = Odp::where('code_odp', $item->odp_name)
-                ->when($item->billing_node_id, fn($q, $b) => $q->where('billing_node_id', $b))
-                ->first();
-
-            $lat = !empty($item->avg_lat) ? (string) round($item->avg_lat, 6) : null;
-            $lng = !empty($item->avg_lng) ? (string) round($item->avg_lng, 6) : null;
-
-            if (!$existing) {
-                Odp::create([
-                    'billing_node_id' => $item->billing_node_id,
-                    'code_odp'        => $item->odp_name,
-                    'name'            => 'ODP ' . $item->odp_name,
-                    'latitude'        => $lat ?? '-6.175392',
-                    'longitude'       => $lng ?? '106.827153',
-                    'total_ports'     => max(8, (int) $item->total_customers),
-                    'used_ports'      => (int) $item->total_customers,
-                    'status'          => ((int) $item->total_customers >= 8) ? 'full' : 'active',
-                    'created_by'      => $user->id,
-                    'notes'           => 'Otomatis di-sinkronisasi dari data sebaran pelanggan',
-                ]);
-                $createdCount++;
-            } else {
-                // Update used_ports if different
-                if ($existing->used_ports != (int) $item->total_customers) {
-                    $existing->update([
-                        'used_ports' => (int) $item->total_customers,
-                    ]);
-                    $updatedCount++;
-                }
-            }
+    /**
+     * Assign a customer to a specific ODP port
+     */
+    public function assignPort(Request $request, int $id)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'operator'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Role teknisi hanya memiliki hak baca (read-only).'
+            ], 403);
         }
 
-        return redirect()->route('odp.index')->with('success', "Sinkronisasi ODP selesai: {$createdCount} ODP baru didaftarkan, {$updatedCount} data ODP diperbarui.");
+        $odp = Odp::findOrFail($id);
+
+        $validated = $request->validate([
+            'port_number' => ['required', 'integer', 'min:1', 'max:' . max(1, $odp->total_ports)],
+            'customer_id' => ['required', 'exists:customers,id'],
+        ]);
+
+        $portNumber = (int) $validated['port_number'];
+        $customer = Customer::findOrFail($validated['customer_id']);
+
+        if ($odp->billing_node_id && $customer->billing_node_id != $odp->billing_node_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pelanggan harus berasal dari Server Billing yang sama dengan ODP ini.'
+            ], 422);
+        }
+
+        // If another customer was previously on this exact port in this ODP, detach them
+        Customer::where('odp_name', $odp->code_odp)
+            ->when($odp->billing_node_id, fn($q) => $q->where('billing_node_id', $odp->billing_node_id))
+            ->where('port_number', $portNumber)
+            ->where('id', '!=', $customer->id)
+            ->update([
+                'port_number' => null
+            ]);
+
+        // Assign customer to this ODP and port
+        $customer->update([
+            'odp_name'    => $odp->code_odp,
+            'port_number' => $portNumber,
+        ]);
+
+        // Sync to remote billing node if connected
+        $this->syncCustomerToBillingNode($odp, $customer, $portNumber);
+
+        // Recalculate used_ports and status
+        $usedCount = Customer::where('odp_name', $odp->code_odp)
+            ->when($odp->billing_node_id, fn($q) => $q->where('billing_node_id', $odp->billing_node_id))
+            ->count();
+
+        $newStatus = ($usedCount >= $odp->total_ports && $odp->status === 'active') ? 'full' : $odp->status;
+        $odp->update([
+            'used_ports' => $usedCount,
+            'status'     => $newStatus,
+        ]);
+
+        $matrix = $odp->getPortMatrix();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Pelanggan [{$customer->name}] berhasil dipasang ke Port {$portNumber} ODP {$odp->code_odp}.",
+            'ports'   => $matrix['ports'],
+            'odp'     => [
+                'id'         => $odp->id,
+                'used_ports' => $usedCount,
+                'status'     => $odp->status,
+            ],
+        ]);
+    }
+
+    /**
+     * Detach a customer from an ODP port
+     */
+    public function detachPort(Request $request, int $id)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'operator'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Role teknisi hanya memiliki hak baca (read-only).'
+            ], 403);
+        }
+
+        $odp = Odp::findOrFail($id);
+
+        $validated = $request->validate([
+            'port_number' => ['nullable', 'integer', 'min:1'],
+            'customer_id' => ['nullable', 'exists:customers,id'],
+        ]);
+
+        $query = Customer::where('odp_name', $odp->code_odp)
+            ->when($odp->billing_node_id, fn($q) => $q->where('billing_node_id', $odp->billing_node_id));
+
+        if (!empty($validated['customer_id'])) {
+            $customer = $query->where('id', $validated['customer_id'])->first();
+        } elseif (!empty($validated['port_number'])) {
+            $customer = $query->where('port_number', $validated['port_number'])->first();
+        } else {
+            return response()->json(['success' => false, 'message' => 'Customer atau Port tidak ditentukan.'], 422);
+        }
+
+        if ($customer) {
+            $customerName = $customer->name;
+            $oldPort = $customer->port_number;
+
+            $customer->update([
+                'odp_name'    => null,
+                'port_number' => null,
+            ]);
+
+            // Sync detach to billing node
+            $this->syncCustomerToBillingNode($odp, $customer, null);
+
+            // Recalculate used_ports and status
+            $usedCount = Customer::where('odp_name', $odp->code_odp)
+                ->when($odp->billing_node_id, fn($q) => $q->where('billing_node_id', $odp->billing_node_id))
+                ->count();
+
+            $newStatus = ($odp->status === 'full' && $usedCount < $odp->total_ports) ? 'active' : $odp->status;
+            $odp->update([
+                'used_ports' => $usedCount,
+                'status'     => $newStatus,
+            ]);
+
+            $matrix = $odp->getPortMatrix();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Pelanggan [{$customerName}] berhasil dilepas dari Port {$oldPort}.",
+                'ports'   => $matrix['ports'],
+                'odp'     => [
+                    'id'         => $odp->id,
+                    'used_ports' => $usedCount,
+                    'status'     => $odp->status,
+                ],
+            ]);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Data pelanggan pada port ini tidak ditemukan.'], 404);
+    }
+
+    /**
+     * Sync customer ODP & port changes back to the connected billing node database
+     */
+    protected function syncCustomerToBillingNode(Odp $odp, Customer $customer, ?int $portNumber): void
+    {
+        if (empty($customer->remote_customer_id)) {
+            return;
+        }
+
+        $billing = $odp->billingNode ?: ($odp->billing_node_id ? BillingInstance::find($odp->billing_node_id) : null);
+        if (!$billing) {
+            return;
+        }
+
+        try {
+            $conn = $billing->getDatabaseConnection() ?: ($billing->tenant_code === 'BILL-001' ? DB::connection('billing_ci3') : null);
+            if ($conn) {
+                $remoteOdpId = null;
+                if ($portNumber !== null) {
+                    $cleanCode = preg_replace('/^ODP-/', '', $odp->code_odp);
+                    $remoteOdp = $conn->table('m_odp')
+                        ->where('code_odp', $odp->code_odp)
+                        ->orWhere('code_odp', $cleanCode)
+                        ->orWhere('code_odp', 'like', "{$cleanCode}-%")
+                        ->orWhere('id_odp', $odp->id)
+                        ->first();
+                    $remoteOdpId = $remoteOdp?->id_odp;
+                }
+
+                $conn->table('customer')
+                    ->where('customer_id', $customer->remote_customer_id)
+                    ->update([
+                        'id_odp'      => $remoteOdpId,
+                        'no_port_odp' => $portNumber,
+                    ]);
+
+                \Illuminate\Support\Facades\Log::info("Synced customer {$customer->no_services} to billing DB [{$billing->tenant_code}]: ODP ID={$remoteOdpId}, Port={$portNumber}");
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Failed to sync customer {$customer->no_services} to billing DB: " . $e->getMessage());
+        }
     }
 }

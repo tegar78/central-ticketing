@@ -49,11 +49,14 @@ Route::middleware('auth')->group(function () {
     // Maps & Management ODP (Optical Distribution Point)
     Route::get('/maps/odp', [OdpController::class, 'index'])->name('odp.index');
     Route::post('/maps/odp', [OdpController::class, 'store'])->name('odp.store');
-    Route::get('/maps/odp/{id}', [OdpController::class, 'show'])->name('odp.show');
-    Route::post('/maps/odp/{id}', [OdpController::class, 'update'])->name('odp.update');
-    Route::delete('/maps/odp/{id}', [OdpController::class, 'destroy'])->name('odp.destroy');
-    Route::post('/maps/odp/{id}/photo', [OdpController::class, 'uploadPhoto'])->name('odp.uploadPhoto');
-    Route::post('/maps/odp/sync-customers', [OdpController::class, 'syncFromCustomers'])->name('odp.syncCustomers');
+    Route::get('/maps/odp/{id}', [OdpController::class, 'show'])->whereNumber('id')->name('odp.show');
+    Route::post('/maps/odp/{id}', [OdpController::class, 'update'])->whereNumber('id')->name('odp.update');
+    Route::delete('/maps/odp/{id}', [OdpController::class, 'destroy'])->whereNumber('id')->name('odp.destroy');
+    Route::post('/maps/odp/{id}/photo', [OdpController::class, 'uploadPhoto'])->whereNumber('id')->name('odp.uploadPhoto');
+    Route::get('/maps/odp/{id}/ports', [OdpController::class, 'ports'])->whereNumber('id')->name('odp.ports');
+    Route::get('/maps/odp/{id}/search-customers', [OdpController::class, 'searchAvailableCustomers'])->whereNumber('id')->name('odp.searchCustomers');
+    Route::post('/maps/odp/{id}/assign-port', [OdpController::class, 'assignPort'])->whereNumber('id')->name('odp.assignPort');
+    Route::post('/maps/odp/{id}/detach-port', [OdpController::class, 'detachPort'])->whereNumber('id')->name('odp.detachPort');
 
     // System Activity Logs
     Route::get('/activities', [\App\Http\Controllers\ActivityLogController::class, 'index'])->name('activities.index');

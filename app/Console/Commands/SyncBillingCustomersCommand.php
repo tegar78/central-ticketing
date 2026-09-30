@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\BillingInstance;
 use App\Models\Customer;
+use App\Models\Odp;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Carbon;
@@ -51,6 +52,12 @@ class SyncBillingCustomersCommand extends Command
                 $this->warn("  ⚠ REST API tidak merespon, mencoba fallback direct database...");
                 $syncedCount = $this->syncFromDirectDatabase($tenant);
             }
+
+            // Always enrich port numbers and ODP associations if direct DB is accessible
+            $this->enrichPortsFromDirectDatabase($tenant);
+
+            // Automatically recalculate ODP capacity and full/active status
+            $this->recalculateOdpCapacity($tenant);
 
             $totalSynced += $syncedCount;
         }
@@ -177,6 +184,7 @@ class SyncBillingCustomersCommand extends Command
                 'phone'              => $cust['phone'] ?? $cust['no_wa'] ?? null,
                 'address'            => isset($cust['address']) ? trim($cust['address']) : null,
                 'odp_name'           => $cust['odp_name'] ?? $cust['odp_code'] ?? null,
+                'port_number'        => !empty($cust['no_port_odp']) ? (int) $cust['no_port_odp'] : (!empty($cust['port_number']) ? (int) $cust['port_number'] : null),
                 'latitude'           => isset($cust['latitude']) ? (string) $cust['latitude'] : null,
                 'longitude'          => isset($cust['longitude']) ? (string) $cust['longitude'] : null,
                 'package_name'       => $cust['package_name'] ?? $cust['user_profile'] ?? null,
@@ -207,7 +215,7 @@ class SyncBillingCustomersCommand extends Command
         Customer::upsert(
             $upsertData,
             ['billing_node_id', 'remote_customer_id'],
-            ['no_services', 'name', 'phone', 'address', 'odp_name', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
+            ['no_services', 'name', 'phone', 'address', 'odp_name', 'port_number', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
         );
 
         $this->info("  ✓ Berhasil menyimpan " . count($upsertData) . " pelanggan ke database Central.");
@@ -249,6 +257,7 @@ class SyncBillingCustomersCommand extends Command
                 'customer.user_profile',
                 'customer.cust_amount',
                 'customer.id_odp',
+                'customer.no_port_odp',
                 'm_odp.code_odp as odp_code',
             ])
             ->get();
@@ -296,6 +305,7 @@ class SyncBillingCustomersCommand extends Command
                     'phone'              => !empty($cust->no_wa) ? (string) $cust->no_wa : null,
                     'address'            => !empty($cust->address) ? trim((string) $cust->address) : null,
                     'odp_name'           => !empty($cust->odp_code) ? (string) $cust->odp_code : null,
+                    'port_number'        => !empty($cust->no_port_odp) ? (int) $cust->no_port_odp : null,
                     'latitude'           => !empty($cust->latitude) ? (string) $cust->latitude : null,
                     'longitude'          => !empty($cust->longitude) ? (string) $cust->longitude : null,
                     'package_name'       => !empty($cust->user_profile) ? (string) $cust->user_profile : null,
@@ -309,7 +319,7 @@ class SyncBillingCustomersCommand extends Command
             Customer::upsert(
                 $upsertData,
                 ['billing_node_id', 'remote_customer_id'],
-                ['no_services', 'name', 'phone', 'address', 'odp_name', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
+                ['no_services', 'name', 'phone', 'address', 'odp_name', 'port_number', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
             );
 
             $syncedCount += count($upsertData);
@@ -321,6 +331,94 @@ class SyncBillingCustomersCommand extends Command
         $this->info("  ✓ SUKSES: {$syncedCount} pelanggan tersinkronkan dari [{$tenant->tenant_code}] {$tenant->name}");
 
         return $syncedCount;
+    }
+
+    /**
+     * Enrich customers with ODP and port numbers from direct database if available
+     */
+    private function enrichPortsFromDirectDatabase(BillingInstance $tenant): void
+    {
+        try {
+            $conn = $tenant->getDatabaseConnection() ?: ($tenant->tenant_code === 'BILL-001' ? DB::connection('billing_ci3') : null);
+            if (!$conn) {
+                return;
+            }
+
+            $portRows = $conn->table('customer')
+                ->leftJoin('m_odp', 'customer.id_odp', '=', 'm_odp.id_odp')
+                ->whereNotNull('customer.no_port_odp')
+                ->where('customer.no_port_odp', '!=', '')
+                ->where('customer.no_port_odp', '!=', 0)
+                ->select([
+                    'customer.customer_id',
+                    'customer.id_odp',
+                    'customer.no_port_odp',
+                    'm_odp.code_odp as odp_code',
+                ])
+                ->get();
+
+            if ($portRows->isNotEmpty()) {
+                $allOdps = Odp::where('billing_node_id', $tenant->id)->get()->keyBy('code_odp');
+                $allOdpsById = Odp::where('billing_node_id', $tenant->id)->get()->keyBy('id');
+
+                $updatedCount = 0;
+                foreach ($portRows as $row) {
+                    $rawOdp = (string) ($row->odp_code ?? '');
+                    $base = explode('-', $rawOdp)[0];
+
+                    $odp = $allOdps->get($rawOdp)
+                        ?? $allOdps->get('ODP-' . $rawOdp)
+                        ?? $allOdps->get('ODP-' . $base)
+                        ?? $allOdpsById->get((int) $row->id_odp);
+
+                    $updateData = [
+                        'port_number' => (int) $row->no_port_odp,
+                    ];
+                    if ($odp) {
+                        $updateData['odp_name'] = $odp->code_odp;
+                    }
+
+                    $updated = Customer::where('billing_node_id', $tenant->id)
+                        ->where('remote_customer_id', (int) $row->customer_id)
+                        ->update($updateData);
+
+                    if ($updated) {
+                        $updatedCount++;
+                    }
+                }
+                $this->info("  ✓ Sinkronisasi Port: {$updatedCount} pelanggan berhasil disematkan nomor port ODP dari database billing.");
+            }
+        } catch (\Throwable $e) {
+            Log::info("Enrichment ports from direct DB skipped: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Recalculate ODP used_ports and status for a billing instance
+     */
+    private function recalculateOdpCapacity(BillingInstance $tenant): void
+    {
+        try {
+            $odps = Odp::where('billing_node_id', $tenant->id)->get();
+            foreach ($odps as $odp) {
+                $usedCount = Customer::where('billing_node_id', $tenant->id)
+                    ->where('odp_name', $odp->code_odp)
+                    ->count();
+
+                $status = ($usedCount >= $odp->total_ports && $odp->status === 'active') ? 'full' : $odp->status;
+                if ($odp->status === 'full' && $usedCount < $odp->total_ports) {
+                    $status = 'active';
+                }
+
+                $odp->update([
+                    'used_ports' => $usedCount,
+                    'status'     => $status,
+                ]);
+            }
+            $this->info("  ✓ Kapasitas dan status ODP berhasil diperbarui secara otomatis.");
+        } catch (\Throwable $e) {
+            Log::info("Recalculate ODP capacity skipped: " . $e->getMessage());
+        }
     }
 
     /**

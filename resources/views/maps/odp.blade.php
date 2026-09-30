@@ -68,15 +68,6 @@
                 <i class="fa-solid fa-plug text-[10px]"></i>
                 <span>Port: <strong>{{ number_format($totalUsedPorts) }}/{{ number_format($totalCapacity) }}</strong> ({{ $overallPortOccupancy }}%)</span>
             </div>
-            @if($unregisteredOdpCount > 0 && in_array($user->role, ['admin', 'operator']))
-            <form action="{{ route('odp.syncCustomers') }}" method="POST" class="inline">
-                @csrf
-                <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-sm transition-all" title="Ditemukan {{ $unregisteredOdpCount }} ODP baru dari data pelanggan yang belum terdaftar di master ODP">
-                    <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
-                    <span>Daftarkan {{ $unregisteredOdpCount }} ODP Baru</span>
-                </button>
-            </form>
-            @endif
         </div>
     </div>
 
@@ -376,10 +367,10 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 font-medium">
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-semibold">
+                            <button type="button" onclick="openOdpPortsModal({{ $odp->id }}, '{{ $odp->code_odp }}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/40 text-slate-700 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300 text-[11px] font-semibold transition-all border border-transparent hover:border-indigo-300 dark:hover:border-indigo-800 cursor-pointer" title="Kelola Pelanggan & Port ODP">
                                 <i class="fa-solid fa-users text-emerald-500 text-[10px]"></i>
                                 <span>{{ $odp->customers_count }} Pelanggan</span>
-                            </span>
+                            </button>
                         </td>
                         <td class="px-4 py-3 font-mono text-[11px] text-slate-500 dark:text-slate-400">
                             @if($odp->latitude && $odp->longitude)
@@ -395,6 +386,11 @@
                         </td>
                         <td class="px-4 py-3 text-center">
                             <div class="flex items-center justify-center gap-1.5">
+                                <!-- Daftar Port & Pelanggan Terpasang -->
+                                <button type="button" onclick="openOdpPortsModal({{ $odp->id }}, '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 dark:text-indigo-400 flex items-center justify-center transition-colors" title="Daftar Pelanggan Terpasang di Port">
+                                    <i class="fa-solid fa-plug text-xs"></i>
+                                </button>
+
                                 <!-- Fly to map button -->
                                 @if($odp->latitude && $odp->longitude)
                                 <button type="button" onclick="flyToOdpCoordinates({{ $odp->latitude }}, {{ $odp->longitude }}, '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-400 flex items-center justify-center transition-colors" title="Lihat di Peta">
@@ -431,7 +427,7 @@
                     <tr>
                         <td colspan="9" class="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
                             <i class="fa-solid fa-network-wired text-3xl mb-2 block opacity-40"></i>
-                            <span>Belum ada data ODP yang tersimpan. Klik tombol <strong>Tambah ODP</strong> atau <strong>Daftarkan ODP Baru</strong> untuk sinkronisasi dari data pelanggan.</span>
+                            <span>Belum ada data ODP yang tersimpan. Klik tombol <strong>Tambah ODP</strong> untuk menambahkan data.</span>
                         </td>
                     </tr>
                     @endforelse
@@ -725,6 +721,116 @@
     </div>
 </div>
 
+{{-- MODAL 5: Daftar Pelanggan yang Terpasang di ODP (Port Allocation Matrix) --}}
+<div id="odpPortsModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 overflow-y-auto modal-backdrop">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative my-8 max-h-[90vh] flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-800 flex-shrink-0">
+            <div>
+                <h3 class="font-bold text-slate-900 dark:text-white text-base sm:text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-indigo-500"></i>
+                    <span>Daftar Pelanggan yang terpasang</span>
+                </h3>
+                <div class="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                    <span id="portsModalOdpCode" class="font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/40"></span>
+                    <span id="portsModalBilling" class="font-semibold text-slate-600 dark:text-slate-300"></span>
+                    <span class="w-1 h-1 rounded-full bg-slate-400"></span>
+                    <span id="portsModalCapacity" class="font-semibold text-indigo-600 dark:text-indigo-400"></span>
+                </div>
+            </div>
+            <button type="button" onclick="closeOdpPortsModal()" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-base"></i>
+            </button>
+        </div>
+
+        <!-- Role Notice for Technician -->
+        <div id="portsModalRoleNotice" class="hidden mt-3 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
+            <i class="fa-solid fa-shield-halved text-amber-500"></i>
+            <span>Mode Baca (Teknisi): Anda hanya memiliki hak akses untuk melihat daftar port dan status pelanggan.</span>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="portsModalLoading" class="py-12 text-center text-slate-400">
+            <i class="fa-solid fa-circle-notch fa-spin text-2xl text-indigo-500 mb-2"></i>
+            <p class="text-xs">Memuat data port dan pelanggan...</p>
+        </div>
+
+        <!-- Scrollable Table Container -->
+        <div id="portsModalContent" class="hidden mt-4 overflow-y-auto flex-1 border border-slate-200 dark:border-slate-800 rounded-xl">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead class="bg-slate-50 dark:bg-slate-800/80 sticky top-0 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                    <tr>
+                        <th class="py-3 px-4 w-20 text-center">No Port</th>
+                        <th class="py-3 px-4">Nama Pelanggan</th>
+                        <th class="py-3 px-4 w-32 text-center">Status</th>
+                        <th class="py-3 px-4 w-28 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="portsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                    <!-- Dynamic Rows populated by JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Unassigned Customers Warning (if any) -->
+        <div id="unassignedCustomersSection" class="hidden mt-3 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs">
+            <div class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5 mb-1">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>Pelanggan terhubung ke ODP ini tetapi belum memiliki nomor port:</span>
+            </div>
+            <div id="unassignedCustomersList" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-between pt-4 mt-3 border-t border-slate-200/80 dark:border-slate-800 flex-shrink-0">
+            <div class="text-[11px] text-slate-400">
+                <i class="fa-solid fa-rotate mr-1"></i>Status pelanggan tersinkron otomatis dari Node Billing.
+            </div>
+            <button type="button" onclick="closeOdpPortsModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold">
+                Tutup
+            </button>
+        </div>
+    </div>
+</div>
+
+{{-- SUB-MODAL: Assign / Pasang Pelanggan ke Port --}}
+<div id="assignPortModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 overflow-y-auto modal-backdrop">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative my-8">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
+            <h3 class="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                <i class="fa-solid fa-plug text-emerald-600"></i>
+                <span>Pasang Pelanggan ke <span id="assignModalPortTitle" class="font-mono text-emerald-600">Port #</span></span>
+            </h3>
+            <button type="button" onclick="closeAssignPortModal()" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div class="mt-4 space-y-3">
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Cari Pelanggan di Server Billing Terkait</label>
+                <div class="relative">
+                    <input type="text" id="assignSearchInput" oninput="debounceSearchCustomers()" placeholder="Ketik nama, no layanan, atau telepon..." class="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                </div>
+            </div>
+
+            <!-- List Results -->
+            <div id="assignSearchResultsList" class="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50/50 dark:bg-slate-800/30">
+                <div class="p-4 text-center text-xs text-slate-400">
+                    Memuat daftar pelanggan...
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-4 mt-3 border-t border-slate-200/80 dark:border-slate-800">
+            <button type="button" onclick="closeAssignPortModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold">
+                Batal
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Raw ODP JSON Data for Leaflet -->
 <script type="application/json" id="odpsData">
     @json($markedOdps)
@@ -905,6 +1011,9 @@ function initOdpMap() {
 
                 <!-- Action Buttons -->
                 <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="openOdpPortsModal(${odp.id}, '${safeCode}')" class="col-span-2 px-2 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors">
+                        <i class="fa-solid fa-plug text-xs"></i> Kelola Port & Pelanggan (${custCount})
+                    </button>
                     <button type="button" onclick="openUploadPhotoModal(${odp.id}, '${safeCode}')" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1">
                         <i class="fa-solid fa-camera text-sky-500"></i> ${odp.photo_url ? 'Ganti Foto' : 'Upload Foto'}
                     </button>
@@ -1083,6 +1192,344 @@ function openLightbox(url, caption) {
 function closeLightbox() {
     document.getElementById('odpLightboxModal').classList.add('hidden');
     document.getElementById('lightboxImage').src = '';
+}
+
+// ==========================================
+// PORT ALLOCATION & CUSTOMER MANAGEMENT MODAL
+// ==========================================
+let currentActiveOdpId = null;
+let currentActiveOdpCode = '';
+let currentTargetPortNumber = null;
+let searchDebounceTimer = null;
+const canEditPorts = {{ in_array($user->role, ['admin', 'operator']) ? 'true' : 'false' }};
+
+function openOdpPortsModal(odpId, codeOdp) {
+    currentActiveOdpId = odpId;
+    currentActiveOdpCode = codeOdp;
+
+    document.getElementById('portsModalOdpCode').textContent = codeOdp;
+    document.getElementById('portsModalBilling').textContent = 'Memuat server...';
+    document.getElementById('portsModalCapacity').textContent = '';
+    document.getElementById('portsTableBody').innerHTML = '';
+    document.getElementById('portsModalLoading').classList.remove('hidden');
+    document.getElementById('portsModalContent').classList.add('hidden');
+    document.getElementById('unassignedCustomersSection').classList.add('hidden');
+    document.getElementById('unassignedCustomersList').innerHTML = '';
+
+    const roleNotice = document.getElementById('portsModalRoleNotice');
+    if (roleNotice) {
+        if (!canEditPorts) {
+            roleNotice.classList.remove('hidden');
+        } else {
+            roleNotice.classList.add('hidden');
+        }
+    }
+
+    document.getElementById('odpPortsModal').classList.remove('hidden');
+
+    loadOdpPortsData(odpId);
+}
+
+function closeOdpPortsModal() {
+    document.getElementById('odpPortsModal').classList.add('hidden');
+    currentActiveOdpId = null;
+    currentActiveOdpCode = '';
+}
+
+function loadOdpPortsData(odpId) {
+    fetch(`/maps/odp/${odpId}/ports`, {
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(res => {
+        if (!res.ok) throw new Error('Gagal memuat data port');
+        return res.json();
+    })
+    .then(data => {
+        document.getElementById('portsModalLoading').classList.add('hidden');
+        document.getElementById('portsModalContent').classList.remove('hidden');
+
+        const odp = data.odp;
+        document.getElementById('portsModalOdpCode').textContent = odp.code_odp;
+        document.getElementById('portsModalBilling').textContent = odp.billing_node ? `[${odp.billing_node.tenant_code}] ${odp.billing_node.name}` : 'Semua Server';
+        document.getElementById('portsModalCapacity').textContent = `Terpakai: ${odp.used_ports}/${odp.total_ports} Port`;
+
+        renderPortsTable(data.ports, data.can_edit);
+        renderUnassignedCustomers(data.unassigned, data.can_edit);
+    })
+    .catch(err => {
+        document.getElementById('portsModalLoading').innerHTML = `
+            <div class="text-rose-500 font-semibold p-4">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i> Terjadi kesalahan saat memuat port: ${err.message}
+            </div>
+        `;
+    });
+}
+
+function renderPortsTable(ports, canEdit) {
+    const tbody = document.getElementById('portsTableBody');
+    tbody.innerHTML = '';
+
+    if (!ports || ports.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400">Tidak ada slot port tersedia.</td></tr>`;
+        return;
+    }
+
+    ports.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors';
+
+        // 1. Port Number
+        const portCell = document.createElement('td');
+        portCell.className = 'py-3 px-4 text-center font-bold text-slate-700 dark:text-slate-300 font-mono text-sm';
+        portCell.textContent = p.port_number;
+
+        // 2. Customer Name & Info (matching image 2: Fikrih - Standard)
+        const nameCell = document.createElement('td');
+        nameCell.className = 'py-3 px-4';
+        if (p.customer) {
+            const cust = p.customer;
+            nameCell.innerHTML = `
+                <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span>${escapeHtml(cust.name)}</span>
+                    <span class="text-slate-400 font-normal text-[11px]">- ${escapeHtml(cust.package_name || 'Standard')}</span>
+                </div>
+                <div class="text-[10px] text-slate-400 font-mono mt-0.5">
+                    <span class="text-emerald-600 dark:text-emerald-400 font-semibold">${escapeHtml(cust.no_services)}</span>
+                    ${cust.phone ? ` • <i class="fa-brands fa-whatsapp text-emerald-500 text-[9px]"></i> ${escapeHtml(cust.phone)}` : ''}
+                    ${cust.address ? ` • <span title="${escapeHtml(cust.address)}">${escapeHtml(cust.address.substring(0, 35))}${cust.address.length > 35 ? '...' : ''}</span>` : ''}
+                </div>
+            `;
+        } else {
+            nameCell.innerHTML = `<span class="text-slate-400 dark:text-slate-500 italic text-[11px]">Port Kosong (Tersedia)</span>`;
+        }
+
+        // 3. Status Badge (matching image 2: Aktif)
+        const statusCell = document.createElement('td');
+        statusCell.className = 'py-3 px-4 text-center';
+        if (p.customer) {
+            const st = (p.customer.status || '').toLowerCase();
+            if (st === 'active' || st === 'aktif') {
+                statusCell.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40">Aktif</span>`;
+            } else if (st === 'isolated' || st === 'isolir') {
+                statusCell.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/40">Isolir</span>`;
+            } else {
+                statusCell.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300">Non-Aktif</span>`;
+            }
+        } else {
+            statusCell.innerHTML = `<span class="text-slate-300 dark:text-slate-600">-</span>`;
+        }
+
+        // 4. Action Buttons (matching image 2: Edit pen icon)
+        const actionCell = document.createElement('td');
+        actionCell.className = 'py-3 px-4 text-center';
+
+        if (canEdit) {
+            if (p.customer) {
+                actionCell.innerHTML = `
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button" onclick="openAssignPortModal(${p.port_number})" class="w-8 h-8 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 flex items-center justify-center transition-colors" title="Ubah / Ganti Pelanggan Port ${p.port_number}">
+                            <i class="fa-solid fa-pen-to-square text-sm"></i>
+                        </button>
+                        <button type="button" onclick="detachCustomerPort(${p.port_number}, '${escapeHtml(p.customer.name)}')" class="w-8 h-8 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center justify-center transition-colors" title="Lepas Pelanggan dari Port ${p.port_number}">
+                            <i class="fa-solid fa-link-slash text-xs"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                actionCell.innerHTML = `
+                    <button type="button" onclick="openAssignPortModal(${p.port_number})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 text-[11px] font-bold border border-emerald-200 dark:border-emerald-800/40 transition-colors mx-auto">
+                        <i class="fa-solid fa-plus text-[10px]"></i> Pasang
+                    </button>
+                `;
+            }
+        } else {
+            actionCell.innerHTML = `<span class="text-[10px] text-slate-400 font-semibold italic"><i class="fa-solid fa-lock text-[9px] mr-0.5"></i>Read-Only</span>`;
+        }
+
+        tr.appendChild(portCell);
+        tr.appendChild(nameCell);
+        tr.appendChild(statusCell);
+        tr.appendChild(actionCell);
+        tbody.appendChild(tr);
+    });
+}
+
+function renderUnassignedCustomers(unassigned, canEdit) {
+    const sec = document.getElementById('unassignedCustomersSection');
+    const list = document.getElementById('unassignedCustomersList');
+    list.innerHTML = '';
+
+    if (!unassigned || unassigned.length === 0) {
+        sec.classList.add('hidden');
+        return;
+    }
+
+    sec.classList.remove('hidden');
+    unassigned.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 text-[11px] text-slate-800 dark:text-slate-200';
+        item.innerHTML = `
+            <span><strong>${escapeHtml(c.name)}</strong> (${escapeHtml(c.no_services)})</span>
+            ${canEdit ? `<button type="button" onclick="quickAssignUnassigned(${c.id}, '${escapeHtml(c.name)}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Pilih Port</button>` : ''}
+        `;
+        list.appendChild(item);
+    });
+}
+
+function quickAssignUnassigned(customerId, customerName) {
+    const port = prompt(`Masukkan nomor port (1-${document.getElementById('portsModalCapacity').textContent || '16'}) untuk [${customerName}]:`, '1');
+    if (!port) return;
+    executeAssignCustomerToPort(parseInt(port), customerId);
+}
+
+// ==========================================
+// SUB-MODAL ASSIGN CUSTOMER
+// ==========================================
+function openAssignPortModal(portNumber) {
+    if (!canEditPorts) return;
+    currentTargetPortNumber = portNumber;
+    document.getElementById('assignModalPortTitle').textContent = `Port #${portNumber}`;
+    document.getElementById('assignSearchInput').value = '';
+    document.getElementById('assignPortModal').classList.remove('hidden');
+
+    searchCustomersForPort('');
+}
+
+function closeAssignPortModal() {
+    document.getElementById('assignPortModal').classList.add('hidden');
+    currentTargetPortNumber = null;
+}
+
+function debounceSearchCustomers() {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        const q = document.getElementById('assignSearchInput').value;
+        searchCustomersForPort(q);
+    }, 300);
+}
+
+function searchCustomersForPort(query) {
+    const container = document.getElementById('assignSearchResultsList');
+    container.innerHTML = `<div class="p-4 text-center text-xs text-slate-400"><i class="fa-solid fa-circle-notch fa-spin text-emerald-500 mr-1"></i> Mencari...</div>`;
+
+    fetch(`/maps/odp/${currentActiveOdpId}/search-customers?q=${encodeURIComponent(query)}`, {
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.customers || data.customers.length === 0) {
+            container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">Tidak ada pelanggan yang cocok di server billing ini.</div>`;
+            return;
+        }
+
+        container.innerHTML = '';
+        data.customers.forEach(c => {
+            const isCurrentlyOnOdp = (c.odp_name === currentActiveOdpCode);
+            const div = document.createElement('div');
+            div.className = 'p-3 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 flex items-center justify-between gap-3 cursor-pointer transition-colors';
+            div.onclick = () => {
+                if (confirm(`Pasang pelanggan [${c.name}] (${c.no_services}) ke Port #${currentTargetPortNumber}?`)) {
+                    executeAssignCustomerToPort(currentTargetPortNumber, c.id);
+                }
+            };
+
+            div.innerHTML = `
+                <div>
+                    <div class="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>${escapeHtml(c.name)}</span>
+                        ${isCurrentlyOnOdp ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">Port Saat Ini: ${c.port_number || 'Belum diatur'}</span>` : ''}
+                    </div>
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                        <span class="text-emerald-600 font-semibold">${escapeHtml(c.no_services)}</span>
+                        ${c.package_name ? ` • ${escapeHtml(c.package_name)}` : ''}
+                        ${c.phone ? ` • ${escapeHtml(c.phone)}` : ''}
+                    </div>
+                    ${c.address ? `<div class="text-[10px] text-slate-400 truncate max-w-sm">${escapeHtml(c.address)}</div>` : ''}
+                </div>
+                <button type="button" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-sm flex items-center gap-1 flex-shrink-0">
+                    <i class="fa-solid fa-check text-[10px]"></i> Pilih
+                </button>
+            `;
+            container.appendChild(div);
+        });
+    })
+    .catch(err => {
+        container.innerHTML = `<div class="p-4 text-center text-xs text-rose-500">Gagal mencari data: ${err.message}</div>`;
+    });
+}
+
+function executeAssignCustomerToPort(portNumber, customerId) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
+        || document.querySelector('input[name="_token"]')?.value;
+
+    fetch(`/maps/odp/${currentActiveOdpId}/assign-port`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            port_number: portNumber,
+            customer_id: customerId
+        })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (!res.success) {
+            alert(res.message || 'Gagal memasang pelanggan ke port.');
+            return;
+        }
+
+        closeAssignPortModal();
+        loadOdpPortsData(currentActiveOdpId);
+    })
+    .catch(err => {
+        alert('Terjadi kesalahan jaringan: ' + err.message);
+    });
+}
+
+function detachCustomerPort(portNumber, customerName) {
+    if (!canEditPorts) return;
+    if (!confirm(`Apakah Anda yakin ingin melepas pelanggan [${customerName}] dari Port #${portNumber}?`)) {
+        return;
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
+        || document.querySelector('input[name="_token"]')?.value;
+
+    fetch(`/maps/odp/${currentActiveOdpId}/detach-port`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            port_number: portNumber
+        })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (!res.success) {
+            alert(res.message || 'Gagal melepas pelanggan dari port.');
+            return;
+        }
+        loadOdpPortsData(currentActiveOdpId);
+    })
+    .catch(err => {
+        alert('Terjadi kesalahan jaringan: ' + err.message);
+    });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 </script>
 @endpush

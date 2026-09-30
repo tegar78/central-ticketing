@@ -83,6 +83,54 @@ class Odp extends Model
     }
 
     /**
+     * Get complete port slot matrix from 1 to total_ports with connected customers
+     */
+    public function getPortMatrix(): array
+    {
+        $customers = Customer::when($this->billing_node_id, fn($q) => $q->where('billing_node_id', $this->billing_node_id))
+            ->where('odp_name', $this->code_odp)
+            ->get();
+
+        $byPort = $customers->whereNotNull('port_number')->keyBy('port_number');
+        $unassigned = $customers->whereNull('port_number')->values();
+
+        $ports = [];
+        $total = max(1, (int) $this->total_ports);
+
+        for ($i = 1; $i <= $total; $i++) {
+            $cust = $byPort->get($i);
+            $ports[] = [
+                'port_number' => $i,
+                'status'      => $cust ? 'occupied' : 'available',
+                'customer'    => $cust ? [
+                    'id'           => $cust->id,
+                    'no_services'  => $cust->no_services,
+                    'name'         => $cust->name,
+                    'phone'        => $cust->phone,
+                    'address'      => $cust->address,
+                    'status'       => $cust->status,
+                    'package_name' => $cust->package_name,
+                ] : null,
+            ];
+        }
+
+        return [
+            'total_ports'      => $total,
+            'used_ports_count' => $customers->count(),
+            'ports'            => $ports,
+            'unassigned'       => $unassigned->map(fn($c) => [
+                'id'           => $c->id,
+                'no_services'  => $c->no_services,
+                'name'         => $c->name,
+                'phone'        => $c->phone,
+                'address'      => $c->address,
+                'status'       => $c->status,
+                'package_name' => $c->package_name,
+            ]),
+        ];
+    }
+
+    /**
      * Accessor for full public photo URL
      */
     public function getPhotoUrlAttribute(): ?string

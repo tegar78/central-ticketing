@@ -172,6 +172,7 @@ class CustomerController extends Controller
                             'status'              => ucfirst($cust->status ?? 'Active'),
                             'package_name'        => $cust->package_name ?? 'Regular',
                             'odp_name'            => $cust->odp_name,
+                            'port_number'         => $cust->port_number,
                             'latitude'            => $cust->latitude,
                             'longitude'           => $cust->longitude,
                         ];

@@ -20,6 +20,7 @@ class Customer extends Model
         'phone',
         'address',
         'odp_name',
+        'port_number',
         'latitude',
         'longitude',
         'package_name',
@@ -30,6 +31,7 @@ class Customer extends Model
     protected $casts = [
         'remote_customer_id' => 'integer',
         'billing_node_id' => 'integer',
+        'port_number' => 'integer',
         'monthly_fee' => 'decimal:2',
     ];
 
