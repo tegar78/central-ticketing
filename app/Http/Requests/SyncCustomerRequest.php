@@ -36,6 +36,8 @@ class SyncCustomerRequest extends FormRequest
                 '*.package_name' => 'nullable|string|max:100',
                 '*.monthly_fee' => 'nullable|numeric',
                 '*.status' => 'nullable|in:active,isolated,inactive',
+                '*.port_number' => 'nullable|integer',
+                '*.no_port_odp' => 'nullable|integer',
             ];
         }
 
@@ -52,6 +54,8 @@ class SyncCustomerRequest extends FormRequest
             'package_name' => 'nullable|string|max:100',
             'monthly_fee' => 'nullable|numeric',
             'status' => 'nullable|in:active,isolated,inactive',
+            'port_number' => 'nullable|integer',
+            'no_port_odp' => 'nullable|integer',
         ];
     }
 }

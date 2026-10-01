@@ -309,7 +309,7 @@
                                     </div>
                                 </div>
                             @else
-                                <div class="w-11 h-11 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 text-[10px] cursor-pointer hover:bg-slate-200/60 transition-colors" onclick="openUploadPhotoModal({{ $odp->id }}, '{{ $odp->code_odp }}')" title="Klik untuk upload foto ODP">
+                                <div class="w-11 h-11 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 text-[10px] cursor-pointer hover:bg-slate-200/60 transition-colors" onclick="openUploadPhotoModal('{{ $odp->id }}', '{{ $odp->code_odp }}')" title="Klik untuk upload foto ODP">
                                     <i class="fa-solid fa-camera mb-0.5 text-xs"></i>
                                     <span>Foto</span>
                                 </div>
@@ -343,7 +343,7 @@
                                     <span class="{{ $odp->occupancy_percentage >= 100 ? 'text-amber-600' : 'text-slate-500' }}">{{ $odp->occupancy_percentage }}%</span>
                                 </div>
                                 <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                                    <div class="h-full rounded-full {{ $odp->occupancy_percentage >= 100 ? 'bg-amber-500' : ($odp->occupancy_percentage > 70 ? 'bg-teal-500' : 'bg-emerald-500') }}" style="width: {{ $odp->occupancy_percentage }}%"></div>
+                                    <div class="odp-progress-bar h-full rounded-full {{ $odp->occupancy_percentage >= 100 ? 'bg-amber-500' : ($odp->occupancy_percentage > 70 ? 'bg-teal-500' : 'bg-emerald-500') }}" data-percent="{{ min(100, (int)$odp->occupancy_percentage) }}"></div>
                                 </div>
                             </div>
                         </td>
@@ -367,7 +367,7 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 font-medium">
-                            <button type="button" onclick="openOdpPortsModal({{ $odp->id }}, '{{ $odp->code_odp }}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/40 text-slate-700 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300 text-[11px] font-semibold transition-all border border-transparent hover:border-indigo-300 dark:hover:border-indigo-800 cursor-pointer" title="Kelola Pelanggan & Port ODP">
+                            <button type="button" onclick="openOdpPortsModal('{{ $odp->id }}', '{{ $odp->code_odp }}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/40 text-slate-700 hover:text-indigo-700 dark:text-slate-300 dark:hover:text-indigo-300 text-[11px] font-semibold transition-all border border-transparent hover:border-indigo-300 dark:hover:border-indigo-800 cursor-pointer" title="Kelola Pelanggan & Port ODP">
                                 <i class="fa-solid fa-users text-emerald-500 text-[10px]"></i>
                                 <span>{{ $odp->customers_count }} Pelanggan</span>
                             </button>
@@ -387,25 +387,25 @@
                         <td class="px-4 py-3 text-center">
                             <div class="flex items-center justify-center gap-1.5">
                                 <!-- Daftar Port & Pelanggan Terpasang -->
-                                <button type="button" onclick="openOdpPortsModal({{ $odp->id }}, '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 dark:text-indigo-400 flex items-center justify-center transition-colors" title="Daftar Pelanggan Terpasang di Port">
+                                <button type="button" onclick="openOdpPortsModal('{{ $odp->id }}', '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 dark:text-indigo-400 flex items-center justify-center transition-colors" title="Daftar Pelanggan Terpasang di Port">
                                     <i class="fa-solid fa-plug text-xs"></i>
                                 </button>
 
                                 <!-- Fly to map button -->
                                 @if($odp->latitude && $odp->longitude)
-                                <button type="button" onclick="flyToOdpCoordinates({{ $odp->latitude }}, {{ $odp->longitude }}, '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-400 flex items-center justify-center transition-colors" title="Lihat di Peta">
+                                <button type="button" onclick="flyToOdpCoordinates('{{ $odp->latitude }}', '{{ $odp->longitude }}', '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-400 flex items-center justify-center transition-colors" title="Lihat di Peta">
                                     <i class="fa-solid fa-location-crosshairs text-xs"></i>
                                 </button>
                                 @endif
 
                                 <!-- Upload / Change Photo -->
-                                <button type="button" onclick="openUploadPhotoModal({{ $odp->id }}, '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-600 dark:bg-sky-950/40 dark:hover:bg-sky-900/50 dark:text-sky-400 flex items-center justify-center transition-colors" title="Unggah / Ganti Foto ODP">
+                                <button type="button" onclick="openUploadPhotoModal('{{ $odp->id }}', '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-600 dark:bg-sky-950/40 dark:hover:bg-sky-900/50 dark:text-sky-400 flex items-center justify-center transition-colors" title="Unggah / Ganti Foto ODP">
                                     <i class="fa-solid fa-camera text-xs"></i>
                                 </button>
 
                                 @if(in_array($user->role, ['admin', 'operator']))
                                 <!-- Edit ODP -->
-                                <button type="button" onclick="openEditOdpModal({{ json_encode($odp) }})" class="w-7 h-7 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 dark:text-amber-400 flex items-center justify-center transition-colors" title="Edit Data ODP">
+                                <button type="button" data-odp="{{ base64_encode(json_encode($odp)) }}" onclick="openEditOdpModal(this)" class="w-7 h-7 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 dark:text-amber-400 flex items-center justify-center transition-colors" title="Edit Data ODP">
                                     <i class="fa-solid fa-pen-to-square text-xs"></i>
                                 </button>
                                 @endif
@@ -433,6 +433,11 @@
                     @endforelse
                 </tbody>
             </table>
+            <script>
+                document.querySelectorAll('.odp-progress-bar').forEach(function(el) {
+                    el.style.width = el.getAttribute('data-percent') + '%';
+                });
+            </script>
         </div>
 
         @if($odpList->hasPages())
@@ -722,7 +727,7 @@
 </div>
 
 {{-- MODAL 5: Daftar Pelanggan yang Terpasang di ODP (Port Allocation Matrix) --}}
-<div id="odpPortsModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 overflow-y-auto modal-backdrop">
+<div id="odpPortsModal" data-can-edit="{{ in_array($user->role, ['admin', 'operator']) ? 'true' : 'false' }}" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 overflow-y-auto modal-backdrop">
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative my-8 max-h-[90vh] flex flex-col">
         <!-- Header -->
         <div class="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-800 flex-shrink-0">
@@ -1105,7 +1110,7 @@ function toggleOdpSatelliteLayer() {
 function flyToOdpCoordinates(lat, lng, code) {
     if (!odpMap) return;
     window.scrollTo({ top: document.getElementById('odpMap').offsetTop - 80, behavior: 'smooth' });
-    odpMap.flyTo([lat, lng], 18, { duration: 1.2 });
+    odpMap.flyTo([parseFloat(lat), parseFloat(lng)], 18, { duration: 1.2 });
 }
 
 // Coordinate picking mode
@@ -1139,7 +1144,16 @@ function closeAddOdpModal() {
     document.getElementById('addOdpModal').classList.add('hidden');
 }
 
-function openEditOdpModal(odp) {
+function openEditOdpModal(target) {
+    let odp = target;
+    if (target instanceof HTMLElement || (target && target.dataset && target.dataset.odp)) {
+        try {
+            odp = JSON.parse(atob(target.dataset.odp));
+        } catch (e) {
+            console.error('Failed to parse ODP data:', e);
+            return;
+        }
+    }
     document.getElementById('editOdpForm').action = `/maps/odp/${odp.id}`;
     document.getElementById('editModalCodeHeader').textContent = odp.code_odp;
     document.getElementById('editCodeOdp').value = odp.code_odp;
@@ -1201,7 +1215,7 @@ let currentActiveOdpId = null;
 let currentActiveOdpCode = '';
 let currentTargetPortNumber = null;
 let searchDebounceTimer = null;
-const canEditPorts = {{ in_array($user->role, ['admin', 'operator']) ? 'true' : 'false' }};
+const canEditPorts = document.getElementById('odpPortsModal')?.dataset.canEdit === 'true';
 
 function openOdpPortsModal(odpId, codeOdp) {
     currentActiveOdpId = odpId;
@@ -1289,8 +1303,9 @@ function renderPortsTable(ports, canEdit) {
         if (p.customer) {
             const cust = p.customer;
             nameCell.innerHTML = `
-                <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                     <span>${escapeHtml(cust.name)}</span>
+                    ${cust.billing_node ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">[${escapeHtml(cust.billing_node.tenant_code)}]</span>` : ''}
                     <span class="text-slate-400 font-normal text-[11px]">- ${escapeHtml(cust.package_name || 'Standard')}</span>
                 </div>
                 <div class="text-[10px] text-slate-400 font-mono mt-0.5">
@@ -1369,7 +1384,7 @@ function renderUnassignedCustomers(unassigned, canEdit) {
         const item = document.createElement('div');
         item.className = 'inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 text-[11px] text-slate-800 dark:text-slate-200';
         item.innerHTML = `
-            <span><strong>${escapeHtml(c.name)}</strong> (${escapeHtml(c.no_services)})</span>
+            <span>${c.billing_node ? `<strong class="text-indigo-600 dark:text-indigo-400 font-mono">[${escapeHtml(c.billing_node.tenant_code)}]</strong> ` : ''}<strong>${escapeHtml(c.name)}</strong> (${escapeHtml(c.no_services)})</span>
             ${canEdit ? `<button type="button" onclick="quickAssignUnassigned(${c.id}, '${escapeHtml(c.name)}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Pilih Port</button>` : ''}
         `;
         list.appendChild(item);

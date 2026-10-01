@@ -77,8 +77,11 @@ class Odp extends Model
      */
     public function getScopedCustomersAttribute()
     {
-        return Customer::when($this->billing_node_id, fn($q) => $q->where('billing_node_id', $this->billing_node_id))
-            ->where('odp_name', $this->code_odp)
+        $cleanCode = preg_replace('/^ODP-/i', '', $this->code_odp);
+        return Customer::where(function ($q) use ($cleanCode) {
+                $q->where('odp_name', $this->code_odp)
+                  ->orWhere('odp_name', $cleanCode);
+            })
             ->get();
     }
 
@@ -87,8 +90,12 @@ class Odp extends Model
      */
     public function getPortMatrix(): array
     {
-        $customers = Customer::when($this->billing_node_id, fn($q) => $q->where('billing_node_id', $this->billing_node_id))
-            ->where('odp_name', $this->code_odp)
+        $cleanCode = preg_replace('/^ODP-/i', '', $this->code_odp);
+        $customers = Customer::with('billingNode:id,name,tenant_code')
+            ->where(function ($q) use ($cleanCode) {
+                $q->where('odp_name', $this->code_odp)
+                  ->orWhere('odp_name', $cleanCode);
+            })
             ->get();
 
         $byPort = $customers->whereNotNull('port_number')->keyBy('port_number');
@@ -110,6 +117,11 @@ class Odp extends Model
                     'address'      => $cust->address,
                     'status'       => $cust->status,
                     'package_name' => $cust->package_name,
+                    'billing_node' => $cust->billingNode ? [
+                        'id'          => $cust->billingNode->id,
+                        'tenant_code' => $cust->billingNode->tenant_code,
+                        'name'        => $cust->billingNode->name,
+                    ] : null,
                 ] : null,
             ];
         }
@@ -126,6 +138,11 @@ class Odp extends Model
                 'address'      => $c->address,
                 'status'       => $c->status,
                 'package_name' => $c->package_name,
+                'billing_node' => $c->billingNode ? [
+                    'id'          => $c->billingNode->id,
+                    'tenant_code' => $c->billingNode->tenant_code,
+                    'name'        => $c->billingNode->name,
+                ] : null,
             ]),
         ];
     }

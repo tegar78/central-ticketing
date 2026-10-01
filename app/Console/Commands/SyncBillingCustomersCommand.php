@@ -56,6 +56,12 @@ class SyncBillingCustomersCommand extends Command
             // Always enrich port numbers and ODP associations if direct DB is accessible
             $this->enrichPortsFromDirectDatabase($tenant);
 
+            // Sync master ODPs if /central/odps exists on CI3
+            $this->syncOdpsViaRestApi($tenant);
+
+            // Auto-discover any missing ODPs referenced by customers
+            $this->autoDiscoverMissingOdps($tenant);
+
             // Automatically recalculate ODP capacity and full/active status
             $this->recalculateOdpCapacity($tenant);
 
@@ -162,6 +168,14 @@ class SyncBillingCustomersCommand extends Command
         $now = Carbon::now();
         $upsertData = [];
 
+        // Preload ALL Master ODPs across Central to normalize codes globally
+        $allOdps = Odp::all()->keyBy('code_odp');
+        $cleanOdpMap = [];
+        foreach ($allOdps as $code => $odpObj) {
+            $clean = strtoupper(trim((string)preg_replace('/^ODP-/i', '', $code)));
+            $cleanOdpMap[$clean] = $code;
+        }
+
         foreach ($items as $cust) {
             $remoteId = $cust['remote_customer_id'] ?? $cust['customer_id'] ?? $cust['id'] ?? null;
             $noServices = $cust['no_services'] ?? $cust['no_layanan'] ?? null;
@@ -176,6 +190,24 @@ class SyncBillingCustomersCommand extends Command
 
             $status = $isIsolated ? 'isolated' : $this->mapStatus($cust['status'] ?? $cust['c_status'] ?? 'active');
 
+            // Standardize and normalize ODP code
+            $rawOdp = trim((string)($cust['odp_name'] ?? $cust['odp_code'] ?? ''));
+            $finalOdpName = null;
+            if (!empty($rawOdp)) {
+                $clean = strtoupper(trim((string)preg_replace('/^ODP-/i', '', $rawOdp)));
+                // Also clean any cluster suffix like -C1, -C2
+                $clean = strtoupper(trim((string)preg_replace('/-C[0-9]+$/i', '', $clean)));
+                $normalizedCode = 'ODP-' . $clean;
+
+                $finalOdpName = $allOdps->get($normalizedCode)?->code_odp
+                    ?? ($cleanOdpMap[$clean] ?? null)
+                    ?? $normalizedCode;
+            }
+
+            $portNumber = !empty($cust['no_port_odp']) 
+                ? (int) $cust['no_port_odp'] 
+                : (!empty($cust['port_number']) ? (int) $cust['port_number'] : null);
+
             $upsertData[] = [
                 'billing_node_id'    => $tenant->id,
                 'remote_customer_id' => (int) $remoteId,
@@ -183,8 +215,8 @@ class SyncBillingCustomersCommand extends Command
                 'name'               => (string) $name,
                 'phone'              => $cust['phone'] ?? $cust['no_wa'] ?? null,
                 'address'            => isset($cust['address']) ? trim($cust['address']) : null,
-                'odp_name'           => $cust['odp_name'] ?? $cust['odp_code'] ?? null,
-                'port_number'        => !empty($cust['no_port_odp']) ? (int) $cust['no_port_odp'] : (!empty($cust['port_number']) ? (int) $cust['port_number'] : null),
+                'odp_name'           => $finalOdpName,
+                'port_number'        => $portNumber,
                 'latitude'           => isset($cust['latitude']) ? (string) $cust['latitude'] : null,
                 'longitude'          => isset($cust['longitude']) ? (string) $cust['longitude'] : null,
                 'package_name'       => $cust['package_name'] ?? $cust['user_profile'] ?? null,
@@ -399,10 +431,13 @@ class SyncBillingCustomersCommand extends Command
     private function recalculateOdpCapacity(BillingInstance $tenant): void
     {
         try {
-            $odps = Odp::where('billing_node_id', $tenant->id)->get();
+            $odps = Odp::all();
             foreach ($odps as $odp) {
-                $usedCount = Customer::where('billing_node_id', $tenant->id)
-                    ->where('odp_name', $odp->code_odp)
+                $cleanCode = preg_replace('/^ODP-/i', '', $odp->code_odp);
+                $usedCount = Customer::where(function ($q) use ($odp, $cleanCode) {
+                        $q->where('odp_name', $odp->code_odp)
+                          ->orWhere('odp_name', $cleanCode);
+                    })
                     ->count();
 
                 $status = ($usedCount >= $odp->total_ports && $odp->status === 'active') ? 'full' : $odp->status;
@@ -418,6 +453,144 @@ class SyncBillingCustomersCommand extends Command
             $this->info("  ✓ Kapasitas dan status ODP berhasil diperbarui secara otomatis.");
         } catch (\Throwable $e) {
             Log::info("Recalculate ODP capacity skipped: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Sync ODPs via RESTful API (/central/odps) if available on CI3
+     */
+    private function syncOdpsViaRestApi(BillingInstance $tenant): int
+    {
+        if (empty($tenant->domain_url)) {
+            return 0;
+        }
+
+        $domainUrl = rtrim($tenant->domain_url, '/');
+        try {
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                ->timeout(10)
+                ->withHeaders([
+                    'X-API-Key' => $tenant->api_key,
+                    'Accept'    => 'application/json',
+                ])
+                ->get("{$domainUrl}/central/odps");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $items = $data['data'] ?? (is_array($data) && array_is_list($data) ? $data : null);
+
+                if (!empty($items) && is_array($items)) {
+                    $count = 0;
+                    foreach ($items as $odpItem) {
+                        $rawCode = trim((string)($odpItem['code_odp'] ?? $odpItem['name'] ?? ''));
+                        if (empty($rawCode)) continue;
+
+                        $clean = strtoupper(trim(preg_replace('/^ODP-/i', '', $rawCode)));
+                        $normalizedCode = 'ODP-' . $clean;
+
+                        $totalPorts = !empty($odpItem['total_ports']) 
+                            ? (int)$odpItem['total_ports'] 
+                            : (!empty($odpItem['total_port']) ? (int)$odpItem['total_port'] : 8);
+
+                        Odp::updateOrCreate(
+                            [
+                                'billing_node_id' => $tenant->id,
+                                'code_odp'        => $normalizedCode,
+                            ],
+                            [
+                                'name'        => $odpItem['name'] ?? ('ODP ' . $clean),
+                                'latitude'    => !empty($odpItem['latitude']) ? (string)$odpItem['latitude'] : null,
+                                'longitude'   => !empty($odpItem['longitude']) ? (string)$odpItem['longitude'] : null,
+                                'total_ports' => $totalPorts,
+                                'notes'       => $odpItem['notes'] ?? $odpItem['remark'] ?? null,
+                                'created_by'  => 1,
+                            ]
+                        );
+                        $count++;
+                    }
+
+                    if ($count > 0) {
+                        $this->info("  ✓ Berhasil menyinkronkan {$count} master ODP dari REST API /central/odps");
+                        return $count;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore if /central/odps is not implemented yet on CI3
+        }
+
+        return 0;
+    }
+
+    /**
+     * Auto-discover missing ODPs from customer records for this billing instance
+     */
+    private function autoDiscoverMissingOdps(BillingInstance $tenant): void
+    {
+        $odpNames = Customer::where('billing_node_id', $tenant->id)
+            ->whereNotNull('odp_name')
+            ->where('odp_name', '!=', '')
+            ->pluck('odp_name')
+            ->unique();
+
+        if ($odpNames->isEmpty()) {
+            return;
+        }
+
+        $existingOdps = Odp::all()->keyBy('code_odp');
+        $createdCount = 0;
+
+        foreach ($odpNames as $rawName) {
+            $clean = strtoupper(trim(preg_replace('/^ODP-/i', '', $rawName)));
+            $clean = strtoupper(trim(preg_replace('/-C[0-9]+$/i', '', $clean)));
+            $code = 'ODP-' . $clean;
+
+            if (!$existingOdps->has($code)) {
+                $sampleCust = Customer::where('billing_node_id', $tenant->id)
+                    ->where(function ($q) use ($code, $clean, $rawName) {
+                        $q->where('odp_name', $code)
+                          ->orWhere('odp_name', $clean)
+                          ->orWhere('odp_name', $rawName);
+                    })
+                    ->whereNotNull('latitude')
+                    ->where('latitude', '!=', '')
+                    ->where('latitude', '!=', '0')
+                    ->first();
+
+                $maxPort = Customer::where('billing_node_id', $tenant->id)
+                    ->where(function ($q) use ($code, $clean, $rawName) {
+                        $q->where('odp_name', $code)
+                          ->orWhere('odp_name', $clean)
+                          ->orWhere('odp_name', $rawName);
+                    })
+                    ->max('port_number');
+
+                $totalPorts = ($maxPort && $maxPort > 8) ? 16 : 8;
+
+                $newOdp = Odp::create([
+                    'billing_node_id' => $tenant->id,
+                    'code_odp'        => $code,
+                    'name'            => 'ODP ' . $clean,
+                    'latitude'        => $sampleCust?->latitude,
+                    'longitude'       => $sampleCust?->longitude,
+                    'total_ports'     => $totalPorts,
+                    'used_ports'      => 0,
+                    'status'          => 'active',
+                    'created_by'      => 1,
+                ]);
+
+                $existingOdps->put($code, $newOdp);
+                $createdCount++;
+            }
+
+            // Keep customer odp_name normalized
+            Customer::where('billing_node_id', $tenant->id)
+                ->where('odp_name', $rawName)
+                ->update(['odp_name' => $code]);
+        }
+
+        if ($createdCount > 0) {
+            $this->info("  ✓ Auto-discover: Menemukan dan mendaftarkan {$createdCount} ODP baru dari data pelanggan.");
         }
     }
 

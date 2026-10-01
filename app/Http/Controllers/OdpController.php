@@ -33,7 +33,10 @@ class OdpController extends Controller
         }
 
         if ($billingNodeId) {
-            $mapQuery->where('billing_node_id', $billingNodeId);
+            $mapQuery->where(function ($q) use ($billingNodeId) {
+                $q->where('billing_node_id', $billingNodeId)
+                  ->orWhereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+            });
         }
 
         if ($search) {
@@ -43,7 +46,12 @@ class OdpController extends Controller
         $markedOdps = $mapQuery->get();
 
         // 2. Aggregate stats
-        $baseStatQuery = Odp::when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId));
+        $baseStatQuery = Odp::when($billingNodeId, function ($q) use ($billingNodeId) {
+            $q->where(function ($sq) use ($billingNodeId) {
+                $sq->where('billing_node_id', $billingNodeId)
+                   ->orWhereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+            });
+        });
 
         $totalOdps = (clone $baseStatQuery)->count();
         $markedCount = (clone $baseStatQuery)->hasGpsCoordinates()->count();
@@ -75,7 +83,12 @@ class OdpController extends Controller
         // 3. Paginated ODP Table List
         $tableQuery = Odp::with(['billingNode:id,name,tenant_code', 'creator:id,name'])
             ->withCount('customers')
-            ->when($billingNodeId, fn($q) => $q->where('billing_node_id', $billingNodeId));
+            ->when($billingNodeId, function ($q) use ($billingNodeId) {
+                $q->where(function ($sq) use ($billingNodeId) {
+                    $sq->where('billing_node_id', $billingNodeId)
+                       ->orWhereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+                });
+            });
 
         if ($status && $status !== 'all') {
             $tableQuery->where('status', $status);
@@ -177,27 +190,29 @@ class OdpController extends Controller
             'notes'           => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Check unique code per billing node
-        $exists = Odp::where('code_odp', trim($validated['code_odp']))
-            ->when($validated['billing_node_id'] ?? null, fn($q, $b) => $q->where('billing_node_id', $b))
-            ->exists();
+        $rawCode = trim($validated['code_odp']);
+        $clean = strtoupper(trim((string)preg_replace('/^ODP-/i', '', $rawCode)));
+        $clean = strtoupper(trim((string)preg_replace('/-C[0-9]+$/i', '', $clean)));
+        $normalizedCode = 'ODP-' . $clean;
 
+        // Check unique code across all Central Master ODPs
+        $exists = Odp::where('code_odp', $normalizedCode)->exists();
         if ($exists) {
-            return back()->withInput()->with('error', 'Kode ODP [' . $validated['code_odp'] . '] sudah terdaftar pada server billing yang dipilih.');
+            return back()->withInput()->with('error', 'Kode ODP [' . $normalizedCode . '] sudah terdaftar di Master ODP Central.');
         }
 
         $photoPath = null;
         if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
             $file = $request->file('photo');
-            $cleanCode = Str::slug($validated['code_odp'], '_');
+            $cleanCode = Str::slug($normalizedCode, '_');
             $fileName = $cleanCode . '_' . time() . '_' . Str::random(6) . '.' . $file->getClientOriginalExtension();
             $photoPath = $file->storeAs('odps', $fileName, 'public');
         }
 
         $odp = Odp::create([
             'billing_node_id' => $validated['billing_node_id'] ?? null,
-            'code_odp'        => trim($validated['code_odp']),
-            'name'            => $validated['name'] ?? null,
+            'code_odp'        => $normalizedCode,
+            'name'            => !empty($validated['name']) ? trim($validated['name']) : ('ODP ' . $clean),
             'latitude'        => (string) $validated['latitude'],
             'longitude'       => (string) $validated['longitude'],
             'total_ports'     => (int) $validated['total_ports'],
@@ -209,15 +224,18 @@ class OdpController extends Controller
             'created_by'      => $user->id,
         ]);
 
+        // Auto-broadcast dan sinkronkan ODP baru ke semua billing instances
+        $this->broadcastOdpToBillingInstances($odp);
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Data ODP [' . $odp->code_odp . '] berhasil ditambahkan.',
+                'message' => 'Data ODP [' . $odp->code_odp . '] berhasil ditambahkan dan disinkronkan ke semua billing.',
                 'odp'     => $odp,
             ]);
         }
 
-        return redirect()->route('odp.index')->with('success', 'ODP [' . $odp->code_odp . '] berhasil disimpan ke MariaDB.');
+        return redirect()->route('odp.index')->with('success', 'ODP [' . $odp->code_odp . '] berhasil disimpan dan disinkronkan ke seluruh billing instance.');
     }
 
     /**
@@ -615,6 +633,75 @@ class OdpController extends Controller
             }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning("Failed to sync customer {$customer->no_services} to billing DB: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Broadcast newly created or updated ODP to all active billing instances
+     */
+    protected function broadcastOdpToBillingInstances(Odp $odp): void
+    {
+        $tenants = BillingInstance::where('is_active', true)->get();
+        $cleanCode = preg_replace('/^ODP-/i', '', $odp->code_odp);
+
+        foreach ($tenants as $tenant) {
+            // 1. Direct DB insertion into m_odp if direct DB is accessible
+            try {
+                $conn = $tenant->getDatabaseConnection() ?: ($tenant->tenant_code === 'BILL-001' ? DB::connection('billing_ci3') : null);
+                if ($conn) {
+                    $exists = $conn->table('m_odp')
+                        ->where('code_odp', $odp->code_odp)
+                        ->orWhere('code_odp', $cleanCode)
+                        ->exists();
+
+                    if (!$exists) {
+                        $conn->table('m_odp')->insert([
+                            'code_odp'   => $cleanCode,
+                            'latitude'   => $odp->latitude,
+                            'longitude'  => $odp->longitude,
+                            'total_port' => $odp->total_ports,
+                            'remark'     => $odp->notes ?? $odp->name,
+                            'created'    => time(),
+                            'create_by'  => 0,
+                        ]);
+                        \Illuminate\Support\Facades\Log::info("Auto-added ODP {$cleanCode} to billing DB [{$tenant->tenant_code}]");
+                    } else {
+                        $conn->table('m_odp')
+                            ->where('code_odp', $odp->code_odp)
+                            ->orWhere('code_odp', $cleanCode)
+                            ->update([
+                                'latitude'   => $odp->latitude,
+                                'longitude'  => $odp->longitude,
+                                'total_port' => $odp->total_ports,
+                                'remark'     => $odp->notes ?? $odp->name,
+                            ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Direct DB skipped if connection not available
+            }
+
+            // 2. HTTP push notification if billing instance has domain_url
+            if (!empty($tenant->domain_url)) {
+                try {
+                    \Illuminate\Support\Facades\Http::withoutVerifying()
+                        ->timeout(3)
+                        ->withHeaders([
+                            'X-API-Key' => $tenant->api_key,
+                            'Accept'    => 'application/json',
+                        ])
+                        ->post(rtrim($tenant->domain_url, '/') . '/central/odp_sync', [
+                            'code_odp'    => $odp->code_odp,
+                            'clean_code'  => $cleanCode,
+                            'name'        => $odp->name,
+                            'latitude'    => $odp->latitude,
+                            'longitude'   => $odp->longitude,
+                            'total_ports' => $odp->total_ports,
+                        ]);
+                } catch (\Throwable $e) {
+                    // Silently ignore if webhook not supported by this billing instance
+                }
+            }
         }
     }
 }
