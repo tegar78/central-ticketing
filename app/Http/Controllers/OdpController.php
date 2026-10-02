@@ -26,7 +26,12 @@ class OdpController extends Controller
         // 1. Base query for ODPs with valid GPS coordinates to plot on Leaflet map
         $mapQuery = Odp::hasGpsCoordinates()
             ->with(['billingNode:id,name,tenant_code'])
-            ->withCount('customers');
+            ->withCount(['customers' => function ($q) {
+                $q->where(function ($sub) {
+                    $sub->whereColumn('customers.billing_node_id', 'odps.billing_node_id')
+                        ->orWhereNull('odps.billing_node_id');
+                });
+            }]);
 
         if ($status && $status !== 'all') {
             $mapQuery->where('status', $status);
@@ -35,7 +40,10 @@ class OdpController extends Controller
         if ($billingNodeId) {
             $mapQuery->where(function ($q) use ($billingNodeId) {
                 $q->where('billing_node_id', $billingNodeId)
-                  ->orWhereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+                  ->orWhere(function ($sub) use ($billingNodeId) {
+                      $sub->whereNull('billing_node_id')
+                          ->whereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+                  });
             });
         }
 
@@ -49,7 +57,10 @@ class OdpController extends Controller
         $baseStatQuery = Odp::when($billingNodeId, function ($q) use ($billingNodeId) {
             $q->where(function ($sq) use ($billingNodeId) {
                 $sq->where('billing_node_id', $billingNodeId)
-                   ->orWhereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+                   ->orWhere(function ($sub) use ($billingNodeId) {
+                       $sub->whereNull('billing_node_id')
+                           ->whereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+                   });
             });
         });
 
@@ -82,11 +93,19 @@ class OdpController extends Controller
 
         // 3. Paginated ODP Table List
         $tableQuery = Odp::with(['billingNode:id,name,tenant_code', 'creator:id,name'])
-            ->withCount('customers')
+            ->withCount(['customers' => function ($q) {
+                $q->where(function ($sub) {
+                    $sub->whereColumn('customers.billing_node_id', 'odps.billing_node_id')
+                        ->orWhereNull('odps.billing_node_id');
+                });
+            }])
             ->when($billingNodeId, function ($q) use ($billingNodeId) {
                 $q->where(function ($sq) use ($billingNodeId) {
                     $sq->where('billing_node_id', $billingNodeId)
-                       ->orWhereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+                       ->orWhere(function ($sub) use ($billingNodeId) {
+                           $sub->whereNull('billing_node_id')
+                               ->whereHas('customers', fn($c) => $c->where('billing_node_id', $billingNodeId));
+                       });
                 });
             });
 

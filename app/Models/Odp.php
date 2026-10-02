@@ -96,6 +96,9 @@ class Odp extends Model
                 $q->where('odp_name', $this->code_odp)
                   ->orWhere('odp_name', $cleanCode);
             })
+            ->when($this->billing_node_id, function ($q) {
+                $q->where('billing_node_id', $this->billing_node_id);
+            })
             ->get();
 
         $byPort = $customers->whereNotNull('port_number')->keyBy('port_number');

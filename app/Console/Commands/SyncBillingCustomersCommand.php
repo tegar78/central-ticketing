@@ -438,6 +438,7 @@ class SyncBillingCustomersCommand extends Command
                         $q->where('odp_name', $odp->code_odp)
                           ->orWhere('odp_name', $cleanCode);
                     })
+                    ->when($odp->billing_node_id, fn($q) => $q->where('billing_node_id', $odp->billing_node_id))
                     ->count();
 
                 $status = ($usedCount >= $odp->total_ports && $odp->status === 'active') ? 'full' : $odp->status;
@@ -490,7 +491,7 @@ class SyncBillingCustomersCommand extends Command
 
                         $totalPorts = !empty($odpItem['total_ports']) 
                             ? (int)$odpItem['total_ports'] 
-                            : (!empty($odpItem['total_port']) ? (int)$odpItem['total_port'] : 8);
+                            : (!empty($odpItem['total_port']) ? (int)$odpItem['total_port'] : 16);
 
                         Odp::updateOrCreate(
                             [
@@ -565,7 +566,7 @@ class SyncBillingCustomersCommand extends Command
                     })
                     ->max('port_number');
 
-                $totalPorts = ($maxPort && $maxPort > 8) ? 16 : 8;
+                $totalPorts = max(16, (int)$maxPort);
 
                 $newOdp = Odp::create([
                     'billing_node_id' => $tenant->id,

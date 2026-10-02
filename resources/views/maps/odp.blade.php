@@ -373,10 +373,23 @@
                             </button>
                         </td>
                         <td class="px-4 py-3 font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                            @if($odp->latitude && $odp->longitude)
+                            @php
+                                $rawLat = trim(trim((string)$odp->latitude), '"\'');
+                                $rawLng = trim(trim((string)$odp->longitude), '"\'');
+                                $cleanLat = filter_var(rtrim($rawLat, ','), FILTER_VALIDATE_FLOAT);
+                                $cleanLng = filter_var(rtrim($rawLng, ','), FILTER_VALIDATE_FLOAT);
+                            @endphp
+                            @if($cleanLat !== false && $cleanLng !== false && ($cleanLat != 0 || $cleanLng != 0))
                                 <div class="flex items-center gap-1.5">
-                                    <span>{{ round($odp->latitude, 5) }}, {{ round($odp->longitude, 5) }}</span>
-                                    <a href="https://www.google.com/maps?q={{ $odp->latitude }},{{ $odp->longitude }}" target="_blank" rel="noopener noreferrer" class="text-emerald-600 hover:text-emerald-500 text-xs" title="Buka di Google Maps">
+                                    <span>{{ round($cleanLat, 5) }}, {{ round($cleanLng, 5) }}</span>
+                                    <a href="https://www.google.com/maps?q={{ $cleanLat }},{{ $cleanLng }}" target="_blank" rel="noopener noreferrer" class="text-emerald-600 hover:text-emerald-500 text-xs" title="Buka di Google Maps">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                    </a>
+                                </div>
+                            @elseif(!empty($odp->latitude) && !empty($odp->longitude) && $odp->latitude !== '0' && $odp->longitude !== '0')
+                                <div class="flex items-center gap-1.5">
+                                    <span class="truncate max-w-[130px]" title="{{ $odp->latitude }}, {{ $odp->longitude }}">{{ $odp->latitude }}, {{ $odp->longitude }}</span>
+                                    <a href="https://www.google.com/maps?q={{ urlencode($odp->latitude . ',' . $odp->longitude) }}" target="_blank" rel="noopener noreferrer" class="text-emerald-600 hover:text-emerald-500 text-xs" title="Buka di Google Maps">
                                         <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                     </a>
                                 </div>
@@ -392,8 +405,8 @@
                                 </button>
 
                                 <!-- Fly to map button -->
-                                @if($odp->latitude && $odp->longitude)
-                                <button type="button" onclick="flyToOdpCoordinates('{{ $odp->latitude }}', '{{ $odp->longitude }}', '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-400 flex items-center justify-center transition-colors" title="Lihat di Peta">
+                                @if($cleanLat !== false && $cleanLng !== false && ($cleanLat != 0 || $cleanLng != 0))
+                                <button type="button" onclick="flyToOdpCoordinates('{{ $cleanLat }}', '{{ $cleanLng }}', '{{ $odp->code_odp }}')" class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-400 flex items-center justify-center transition-colors" title="Lihat di Peta">
                                     <i class="fa-solid fa-location-crosshairs text-xs"></i>
                                 </button>
                                 @endif
@@ -503,7 +516,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Kapasitas Port *</label>
-                    <input type="number" name="total_ports" value="8" min="1" max="256" required class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                    <input type="number" name="total_ports" value="16" min="1" max="256" required class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Port Terpakai</label>
@@ -937,7 +950,7 @@ function initOdpMap() {
         const safeName = escapeHtml(odp.name || '-');
         const safeAddress = escapeHtml(odp.address || '-');
         const safeNotes = escapeHtml(odp.notes || '-');
-        const totalPorts = odp.total_ports || 8;
+        const totalPorts = odp.total_ports || 16;
         const usedPorts = odp.used_ports || 0;
         const availablePorts = Math.max(0, totalPorts - usedPorts);
         const occupancy = totalPorts > 0 ? Math.min(100, Math.round((usedPorts / totalPorts) * 100)) : 0;
@@ -1161,7 +1174,7 @@ function openEditOdpModal(target) {
     document.getElementById('editBillingNodeId').value = odp.billing_node_id || '';
     document.getElementById('editLatitude').value = odp.latitude || '';
     document.getElementById('editLongitude').value = odp.longitude || '';
-    document.getElementById('editTotalPorts').value = odp.total_ports || 8;
+    document.getElementById('editTotalPorts').value = odp.total_ports || 16;
     document.getElementById('editUsedPorts').value = odp.used_ports || 0;
     document.getElementById('editStatus').value = odp.status || 'active';
     document.getElementById('editAddress').value = odp.address || '';

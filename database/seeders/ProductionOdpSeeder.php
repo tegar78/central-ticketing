@@ -413,7 +413,7 @@ class ProductionOdpSeeder extends Seeder
                 'name'            => 'ODP ' . preg_replace('/^ODP-?/i', '', $code),
                 'latitude'        => $lat,
                 'longitude'       => $lng,
-                'total_ports'     => 8,
+                'total_ports'     => 16,
                 'used_ports'      => 0,
                 'status'          => 'active',
                 'notes'           => $note,
