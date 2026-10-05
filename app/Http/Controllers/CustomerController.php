@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
 use App\Models\BillingInstance;
 use App\Models\Ticket;
+use Symfony\Component\Process\Process;
 
 class CustomerController extends Controller
 {
@@ -339,5 +340,203 @@ class CustomerController extends Controller
 
         $domain = $instance?->domain_url ?? 'belum diatur';
         return back()->with('warning', "Sinkronisasi {$tenantCode} selesai tetapi 0 data tersimpan. Periksa URL server billing ({$domain}) dan API Key.");
+    }
+
+    /**
+     * Run safe diagnostic ping against customer IP address
+     * Protected against Command Injection (CWE-78) using strict IP validation & Process arguments
+     */
+    public function ping(Request $request, Customer $customer)
+    {
+        $rawIp = $request->filled('ip_address') ? $request->input('ip_address') : null;
+        $liveSession = null;
+
+        // Auto-discover live session and IP from MikroTik active connection / queue
+        $billing = $customer->billingNode;
+        if ($billing && !empty($billing->domain_url)) {
+            try {
+                $domainUrl = rtrim($billing->domain_url, '/');
+                $resp = Http::withoutVerifying()->timeout(4)
+                    ->withHeaders([
+                        'X-API-Key' => $billing->api_key,
+                        'Accept'    => 'application/json',
+                    ])
+                    ->get("{$domainUrl}/central/customer_network/{$customer->no_services}");
+
+                if ($resp->successful() && $resp->json('status')) {
+                    $netData = $resp->json('data');
+                    $liveSession = $netData;
+
+                    if (!empty($netData['ip_address']) && filter_var($netData['ip_address'], FILTER_VALIDATE_IP)) {
+                        $rawIp = $rawIp ?: $netData['ip_address'];
+                        // Persist auto-discovered live IP and PPPoE
+                        $customer->update([
+                            'ip_address' => $netData['ip_address'],
+                            'pppoe_user' => $netData['pppoe_user'] ?? $customer->pppoe_user,
+                        ]);
+                    } elseif (isset($netData['is_online']) && !$netData['is_online']) {
+                        return response()->json([
+                            'success' => false,
+                            'status'  => 'offline_mikrotik',
+                            'message' => "Pelanggan {$customer->name} saat ini tidak memiliki sesi aktif di router MikroTik (" . ($netData['router_alias'] ?? 'Router') . "). Sesi PPPoE / Hotspot sedang offline.",
+                            'customer' => [
+                                'id'          => $customer->id,
+                                'no_services' => $customer->no_services,
+                                'name'        => $customer->name,
+                                'ip_address'  => null,
+                                'pppoe_user'  => $netData['pppoe_user'] ?? $customer->pppoe_user,
+                            ],
+                            'session' => $liveSession,
+                        ], 200);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::info("MikroTik live query failed: " . $e->getMessage());
+            }
+        }
+
+        if (empty($rawIp)) {
+            $rawIp = $customer->ip_address;
+        }
+
+        if (empty($rawIp)) {
+            return response()->json([
+                'success' => false,
+                'status'  => 'error',
+                'message' => 'Alamat IP pelanggan tidak ditemukan dari sesi aktif MikroTik maupun database.',
+            ], 422);
+        }
+
+        $ip = trim((string) $rawIp);
+
+        // Strict IP validation (IPv4 or IPv6) - blocks any injection characters
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return response()->json([
+                'success' => false,
+                'status'  => 'invalid_ip',
+                'message' => 'Format alamat IP tidak valid. Pastikan format IPv4 atau IPv6 benar (misal: 192.168.1.1).',
+            ], 422);
+        }
+
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        $cmd = $isWindows 
+            ? ['ping', '-n', '3', '-w', '1000', $ip] 
+            : ['ping', '-c', '3', '-W', '1', $ip];
+
+        $startTime = microtime(true);
+        $process = new Process($cmd);
+        $process->setTimeout(6);
+
+        try {
+            $process->run();
+            $durationMs = round((microtime(true) - $startTime) * 1000, 1);
+            $output = $process->getOutput() . $process->getErrorOutput();
+            $exitCode = $process->getExitCode();
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'status'  => 'error',
+                'message' => 'Gagal menjalankan proses ping: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        // Parse Packet Loss
+        $packetLoss = null;
+        if (preg_match('/(\d+)%\s*(?:packet\s*)?loss/i', $output, $lossMatch)) {
+            $packetLoss = (int) $lossMatch[1];
+        } else {
+            $packetLoss = ($exitCode === 0) ? 0 : 100;
+        }
+
+        // Parse Latency
+        $avgLatency = null;
+        $minLatency = null;
+        $maxLatency = null;
+
+        // Windows: Minimum = 1ms, Maximum = 3ms, Average = 2ms
+        if (preg_match('/(?:Minimum|min)[ =:\/]+([\d\.]+)(?:ms)?[,\s]+(?:Maximum|max)[ =:\/]+([\d\.]+)(?:ms)?[,\s]+(?:Average|avg)[ =:\/]+([\d\.]+)(?:ms)?/i', $output, $statMatches)) {
+            $minLatency = round((float) $statMatches[1], 1);
+            $maxLatency = round((float) $statMatches[2], 1);
+            $avgLatency = round((float) $statMatches[3], 1);
+        }
+        // Linux: rtt min/avg/max/mdev = 0.038/0.052/0.071/0.014 ms
+        elseif (preg_match('/rtt\s+min\/avg\/max\/mdev\s*=\s*([\d\.]+)\/([\d\.]+)\/([\d\.]+)/i', $output, $linuxMatches)) {
+            $minLatency = round((float) $linuxMatches[1], 1);
+            $avgLatency = round((float) $linuxMatches[2], 1);
+            $maxLatency = round((float) $linuxMatches[3], 1);
+        }
+        // Fallback individual line matches: Reply from ... time=2ms or time<1ms
+        elseif (preg_match_all('/time[=<]([\d\.]+)\s*ms/i', $output, $timeMatches) && !empty($timeMatches[1])) {
+            $latencies = array_map('floatval', $timeMatches[1]);
+            $minLatency = round(min($latencies), 1);
+            $maxLatency = round(max($latencies), 1);
+            $avgLatency = round(array_sum($latencies) / count($latencies), 1);
+        }
+
+        // Determine Status
+        if ($packetLoss === 0 && ($avgLatency !== null || $exitCode === 0)) {
+            $status = 'online';
+        } elseif ($packetLoss > 0 && $packetLoss < 100) {
+            $status = 'unstable';
+        } else {
+            $status = 'offline';
+        }
+
+        return response()->json([
+            'success' => true,
+            'customer' => [
+                'id'          => $customer->id,
+                'no_services' => $customer->no_services,
+                'name'        => $customer->name,
+                'ip_address'  => $ip,
+                'pppoe_user'  => $customer->pppoe_user,
+            ],
+            'session'  => $liveSession,
+            'result'   => [
+                'status'          => $status,
+                'is_online'       => $status !== 'offline',
+                'packet_loss_pct' => $packetLoss,
+                'latency_ms'      => $avgLatency,
+                'min_latency_ms'  => $minLatency,
+                'max_latency_ms'  => $maxLatency,
+                'duration_ms'     => $durationMs,
+                'raw_output'      => trim($output),
+                'timestamp'       => now()->toIso8601String(),
+            ]
+        ]);
+    }
+
+    /**
+     * Update customer IP Address & PPPoE User manually from Central UI
+     */
+    public function updateNetworkInfo(Request $request, Customer $customer)
+    {
+        $validated = $request->validate([
+            'ip_address' => 'nullable|ip|max:45',
+            'pppoe_user' => 'nullable|string|max:128',
+        ], [
+            'ip_address.ip' => 'Format IP Address tidak valid (gunakan format IPv4 atau IPv6 yang sah).',
+        ]);
+
+        $customer->update([
+            'ip_address' => $validated['ip_address'] ?? null,
+            'pppoe_user' => $validated['pppoe_user'] ?? null,
+        ]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => "Data jaringan pelanggan {$customer->name} ({$customer->no_services}) berhasil diperbarui.",
+                'customer' => [
+                    'id'          => $customer->id,
+                    'no_services' => $customer->no_services,
+                    'name'        => $customer->name,
+                    'ip_address'  => $customer->ip_address,
+                    'pppoe_user'  => $customer->pppoe_user,
+                ]
+            ]);
+        }
+
+        return back()->with('success', "Data IP/PPPoE pelanggan {$customer->name} ({$customer->no_services}) berhasil diperbarui.");
     }
 }

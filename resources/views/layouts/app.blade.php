@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Central Ticket Support & Issue Tracking System - Multi-Tenant Billing Integration">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
     <title>@hasSection('title')@yield('title') - @endif{{ config('app.name', 'MANAGEMENT TICKET') }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
@@ -162,6 +163,157 @@
             </div>
         </div>
     </aside>
+
+    <!-- Mobile Off-Canvas Navigation Backdrop Overlay -->
+    <div id="mobileMenuBackdrop" 
+         onclick="closeMobileMenu()" 
+         class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300 lg:hidden"
+         aria-hidden="true"></div>
+
+    <!-- Mobile Off-Canvas Navigation Drawer -->
+    <aside id="mobileMenuDrawer" 
+           class="fixed inset-y-0 left-0 w-72 sm:w-80 max-w-[85vw] bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 z-50 flex flex-col shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out lg:hidden select-none"
+           role="dialog" 
+           aria-modal="true" 
+           aria-label="Navigasi Menu Mobile">
+        
+        <!-- Drawer Header with Logo & Close Button -->
+        <div class="h-16 px-4 sm:px-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 shrink-0">
+            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-emerald-400 rounded-xl py-1">
+                <img src="{{ asset('images/logo.png') }}" alt="MANAGEMENT TICKET" class="w-8 h-8 object-contain">
+                <div>
+                    <span class="font-black text-xs text-slate-900 dark:text-white tracking-tight leading-tight block uppercase">MANAGEMENT</span>
+                    <span class="text-[9px] block text-orange-500 dark:text-orange-400 font-black tracking-widest uppercase">TICKET</span>
+                </div>
+            </a>
+            <button type="button" 
+                    onclick="closeMobileMenu()" 
+                    class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    aria-label="Tutup menu navigasi">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- User Profile Card in Drawer -->
+        <div class="p-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-sm">
+                    {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                </div>
+                <div class="min-w-0">
+                    <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{{ auth()->user()->name }}</div>
+                    <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold capitalize">{{ auth()->user()->role }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scrollable Navigation Items -->
+        <div class="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+            <!-- Main Menu Section -->
+            <div>
+                <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-2">Main Menu</div>
+                <nav class="space-y-1">
+                    <a href="{{ route('dashboard') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('dashboard') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-chart-pie text-sm {{ request()->routeIs('dashboard') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Dashboard</span>
+                    </a>
+
+                    <a href="{{ route('tickets.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('tickets.index') && !request()->has('status') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-ticket text-sm {{ request()->routeIs('tickets.index') && !request()->has('status') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Direktori Tiket</span>
+                    </a>
+
+                    <a href="{{ route('maps.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('maps.index') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-map-location-dot text-sm {{ request()->routeIs('maps.index') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Maps Pelanggan</span>
+                    </a>
+
+                    <a href="{{ route('odp.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('odp.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-network-wired text-sm {{ request()->routeIs('odp.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Maps ODP</span>
+                    </a>
+
+                    @if(in_array(auth()->user()->role, ['admin', 'operator']))
+                    <a href="{{ route('customers.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('customers.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-users text-sm {{ request()->routeIs('customers.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Data Pelanggan</span>
+                    </a>
+                    @endif
+
+                    @if(auth()->user()->role === 'admin')
+                    <a href="{{ route('users.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('users.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-user-gear text-sm {{ request()->routeIs('users.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Kelola User</span>
+                    </a>
+
+                    <a href="{{ route('backups.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('backups.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-database text-sm {{ request()->routeIs('backups.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Backup Database</span>
+                    </a>
+                    @endif
+
+                    @if(in_array(auth()->user()->role, ['admin', 'operator']))
+                    <a href="{{ route('activities.index') }}" 
+                       class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all {{ request()->routeIs('activities.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50' }}">
+                        <i class="fa-solid fa-clock-rotate-left text-sm {{ request()->routeIs('activities.*') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400' }} w-5 text-center"></i>
+                        <span>Log Aktivitas</span>
+                    </a>
+                    @endif
+                </nav>
+            </div>
+
+            <!-- Quick Ticket Status Filter Section -->
+            <div>
+                <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-2">Status Tiket</div>
+                <nav class="space-y-1">
+                    <a href="{{ route('tickets.index', ['status' => 'pending']) }}" 
+                       class="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'pending' ? 'bg-sky-50 text-sky-700 font-bold dark:bg-sky-500/10 dark:text-sky-300' : 'text-slate-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:bg-slate-800/50' }}">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+                            <span>Pending (Baru)</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+                    </a>
+
+                    <a href="{{ route('tickets.index', ['status' => 'process']) }}" 
+                       class="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'process' ? 'bg-amber-50 text-amber-700 font-bold dark:bg-amber-500/10 dark:text-amber-300' : 'text-slate-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:bg-slate-800/50' }}">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span>Dalam Proses</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+                    </a>
+
+                    <a href="{{ route('tickets.index', ['status' => 'close']) }}" 
+                       class="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'close' ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-300' : 'text-slate-600 hover:bg-slate-100/80 dark:text-slate-400 dark:hover:bg-slate-800/50' }}">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>Selesai (Close)</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+                    </a>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Drawer Footer: Logout -->
+        <div class="p-4 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+            <form action="{{ route('logout') }}" method="POST">
+                @csrf
+                <button type="submit" class="w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 transition-colors">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Keluar dari Sistem</span>
+                </button>
+            </form>
+        </div>
+    </aside>
     @endauth
 
     <!-- Main Content Area & Top Header -->
@@ -169,12 +321,11 @@
         <!-- Top Header Bar -->
         <header class="sticky top-0 z-30 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-6 lg:px-8 flex items-center justify-between transition-colors">
             <!-- Left Header: Mobile Toggle & Page Title / Breadcrumb -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 min-w-0">
                 @auth
                 <!-- Mobile Hamburger Button -->
-                <button type="button" onclick="toggleMobileMenu()" id="mobileMenuBtn" class="lg:hidden w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400" aria-label="Buka menu navigasi">
-                    <i class="fa-solid fa-bars text-sm" id="mobileMenuIconOpen"></i>
-                    <i class="fa-solid fa-xmark text-sm hidden" id="mobileMenuIconClose"></i>
+                <button type="button" onclick="openMobileMenu()" id="mobileMenuBtn" class="lg:hidden w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400" aria-label="Buka menu navigasi" aria-expanded="false" aria-controls="mobileMenuDrawer">
+                    <i class="fa-solid fa-bars text-sm"></i>
                 </button>
                 @endauth
 
@@ -237,99 +388,7 @@
             </div>
         </header>
 
-        <!-- Mobile Drawer Navigation -->
-        @auth
-        <div id="mobileMenuDrawer" class="hidden lg:hidden border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-4 py-4 space-y-4 transition-all z-30">
-            <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-100 dark:bg-slate-800">
-                <div class="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center justify-center">
-                    {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
-                </div>
-                <div class="min-w-0">
-                    <div class="text-xs font-bold text-slate-900 dark:text-white truncate">{{ auth()->user()->name }}</div>
-                    <div class="text-[10px] text-emerald-600 dark:text-emerald-400 capitalize">Role: {{ auth()->user()->role }}</div>
-                </div>
-            </div>
 
-            <nav class="space-y-1">
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('dashboard') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-chart-pie w-5 text-center text-emerald-500"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="{{ route('tickets.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('tickets.index') && !request()->has('status') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-ticket w-5 text-center text-emerald-500"></i>
-                    <span>Direktori Tiket</span>
-                </a>
-                <a href="{{ route('maps.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('maps.index') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-map-location-dot w-5 text-center text-emerald-500"></i>
-                    <span>Maps Pelanggan</span>
-                </a>
-                <a href="{{ route('odp.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('odp.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-network-wired w-5 text-center text-emerald-500"></i>
-                    <span>Maps ODP</span>
-                </a>
-                @if(in_array(auth()->user()->role, ['admin', 'operator']))
-                <a href="{{ route('customers.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('customers.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-users w-5 text-center text-emerald-500"></i>
-                    <span>Data Pelanggan</span>
-                </a>
-                @endif
-                @if(auth()->user()->role === 'admin')
-                <a href="{{ route('users.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('users.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-user-gear w-5 text-center text-emerald-500"></i>
-                    <span>Kelola User</span>
-                </a>
-                <a href="{{ route('backups.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('backups.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-database w-5 text-center text-emerald-500"></i>
-                    <span>Backup Database</span>
-                </a>
-                @endif
-                @if(in_array(auth()->user()->role, ['admin', 'operator']))
-                <a href="{{ route('activities.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium {{ request()->routeIs('activities.*') ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300' }}">
-                    <i class="fa-solid fa-clock-rotate-left w-5 text-center text-emerald-500"></i>
-                    <span>Log Aktivitas</span>
-                </a>
-                @endif
-
-                <!-- Quick Ticket Status Filter in Mobile Drawer -->
-                <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
-                    <div class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-1.5">Status Tiket</div>
-                    <div class="space-y-1">
-                        <a href="{{ route('tickets.index', ['status' => 'pending']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'pending' ? 'bg-sky-50 text-sky-700 font-bold dark:bg-sky-500/10 dark:text-sky-300' : 'text-slate-700 dark:text-slate-300' }}">
-                            <div class="flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-sky-500"></span>
-                                <span>Pending (Baru)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
-                        </a>
-                        <a href="{{ route('tickets.index', ['status' => 'process']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'process' ? 'bg-amber-50 text-amber-700 font-bold dark:bg-amber-500/10 dark:text-amber-300' : 'text-slate-700 dark:text-slate-300' }}">
-                            <div class="flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                                <span>Dalam Proses</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
-                        </a>
-                        <a href="{{ route('tickets.index', ['status' => 'close']) }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all {{ request('status') === 'close' ? 'bg-emerald-50 text-emerald-700 font-bold dark:bg-emerald-500/10 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300' }}">
-                            <div class="flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                <span>Selesai (Close)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
-                        </a>
-                    </div>
-                </div>
-
-                <div class="pt-2 border-t border-slate-200 dark:border-slate-800">
-                    <form action="{{ route('logout') }}" method="POST">
-                        @csrf
-                        <button type="submit" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30">
-                            <i class="fa-solid fa-right-from-bracket"></i>
-                            <span>Keluar dari Sistem</span>
-                        </button>
-                    </form>
-                </div>
-            </nav>
-        </div>
-        @endauth
 
         <!-- Main Body Content -->
         <main class="flex-1 w-full px-4 sm:px-6 lg:px-8 py-6">
@@ -399,23 +458,71 @@
             }
         });
 
+        function openMobileMenu() {
+            const drawer = document.getElementById('mobileMenuDrawer');
+            const backdrop = document.getElementById('mobileMenuBackdrop');
+            const btn = document.getElementById('mobileMenuBtn');
+            if (!drawer || !backdrop) return;
+
+            drawer.classList.remove('-translate-x-full');
+            drawer.classList.add('translate-x-0');
+
+            backdrop.classList.remove('opacity-0', 'pointer-events-none');
+            backdrop.classList.add('opacity-100');
+
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeMobileMenu() {
+            const drawer = document.getElementById('mobileMenuDrawer');
+            const backdrop = document.getElementById('mobileMenuBackdrop');
+            const btn = document.getElementById('mobileMenuBtn');
+            if (!drawer || !backdrop) return;
+
+            drawer.classList.remove('translate-x-0');
+            drawer.classList.add('-translate-x-full');
+
+            backdrop.classList.remove('opacity-100');
+            backdrop.classList.add('opacity-0', 'pointer-events-none');
+
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+            document.body.classList.remove('overflow-hidden');
+        }
+
         function toggleMobileMenu() {
             const drawer = document.getElementById('mobileMenuDrawer');
-            const iconOpen = document.getElementById('mobileMenuIconOpen');
-            const iconClose = document.getElementById('mobileMenuIconClose');
-
             if (!drawer) return;
-
-            if (drawer.classList.contains('hidden')) {
-                drawer.classList.remove('hidden');
-                if (iconOpen) iconOpen.classList.add('hidden');
-                if (iconClose) iconClose.classList.remove('hidden');
+            if (drawer.classList.contains('translate-x-0')) {
+                closeMobileMenu();
             } else {
-                drawer.classList.add('hidden');
-                if (iconOpen) iconOpen.classList.remove('hidden');
-                if (iconClose) iconClose.classList.add('hidden');
+                openMobileMenu();
             }
         }
+
+        // Close mobile drawer on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeMobileMenu();
+            }
+        });
+
+        // Auto close drawer if resized to desktop breakpoint (>= 1024px)
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 1024) {
+                closeMobileMenu();
+            }
+        });
+
+        // Close drawer when any navigation link is clicked
+        document.addEventListener('DOMContentLoaded', () => {
+            const drawerLinks = document.querySelectorAll('#mobileMenuDrawer a');
+            drawerLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    closeMobileMenu();
+                });
+            });
+        });
 
         // Global shortcut Ctrl+K to focus search
         document.addEventListener('keydown', (e) => {
@@ -426,6 +533,33 @@
             }
         });
     </script>
+
+    <!-- Global Floating Toast Notification Container -->
+    <div id="globalToastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm pointer-events-none"></div>
+
+    <!-- Global Action Confirmation Modal (Replaces Native confirm()) -->
+    <div id="globalConfirmModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm transition-all" role="dialog" aria-modal="true" aria-labelledby="globalConfirmTitle">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 transform transition-transform">
+            <div class="flex items-center gap-3.5">
+                <div id="globalConfirmIconWrapper" class="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center text-lg flex-shrink-0">
+                    <i id="globalConfirmIcon" class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <h3 id="globalConfirmTitle" class="text-sm sm:text-base font-bold text-slate-900 dark:text-white">Konfirmasi Tindakan</h3>
+                    <p id="globalConfirmMessage" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Apakah Anda yakin ingin melanjutkan tindakan ini?</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onclick="closeConfirmModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition-all">
+                    Batal
+                </button>
+                <button type="button" id="globalConfirmBtn" class="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/25 transition-all">
+                    Ya, Lanjutkan
+                </button>
+            </div>
+        </div>
+    </div>
+
     @stack('scripts')
 </body>
 </html>

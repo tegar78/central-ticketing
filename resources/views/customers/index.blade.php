@@ -99,7 +99,7 @@
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
                     <input type="text" name="search" value="{{ request('search') }}" 
-                           placeholder="Cari no layanan, nama, phone, ODP..." 
+                           placeholder="Cari no layanan, nama, phone, IP, PPPoE, ODP..." 
                            class="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400/30 min-h-[42px]">
                 </div>
             </div>
@@ -292,9 +292,29 @@
                                     <span class="text-slate-400 dark:text-slate-500">-</span>
                                 @endif
                             </td>
-                            <!-- No Layanan -->
+                            <!-- No Layanan & Jaringan (PPPoE / IP MikroTik) -->
                             <td class="px-4 py-4 whitespace-nowrap">
                                 <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">{{ $customer->no_services }}</span>
+
+                                @if($customer->pppoe_user)
+                                    <div class="mt-1 flex items-center gap-1 text-[11px] font-mono text-slate-600 dark:text-slate-300" title="PPPoE: {{ $customer->pppoe_user }}">
+                                        <i class="fa-solid fa-user-shield text-[10px] text-teal-500 flex-shrink-0"></i>
+                                        <span class="truncate max-w-[140px]">{{ $customer->pppoe_user }}</span>
+                                    </div>
+                                @endif
+
+                                @if($customer->ip_address)
+                                    <div class="mt-1 flex items-center gap-1">
+                                        <span class="inline-flex items-center gap-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/40" title="IP MikroTik Aktif">
+                                            <i class="fa-solid fa-network-wired text-[9px] text-sky-500"></i>
+                                            <span>{{ $customer->ip_address }}</span>
+                                        </span>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ $customer->ip_address }}'); showToast('IP disalin ke clipboard');" 
+                                                class="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 p-0.5 transition-colors" title="Salin IP">
+                                            <i class="fa-regular fa-copy text-[10px]"></i>
+                                        </button>
+                                    </div>
+                                @endif
                             </td>
                             <!-- Nama Pelanggan -->
                             <td class="px-4 py-4">
@@ -363,6 +383,14 @@
                                             <i class="fa-solid fa-map-location-dot"></i> Maps
                                         </a>
                                     @endif
+
+                                    <!-- 1-Click Ping Diagnostic -->
+                                    <button type="button" 
+                                            onclick="openPingModal({{ $customer->id }}, '{{ addslashes($customer->name ?? $customer->customer_name) }}', '{{ $customer->no_services }}', '{{ $customer->ip_address ?? '' }}', '{{ addslashes($customer->pppoe_user ?? '') }}')"
+                                            class="px-2.5 py-1.5 {{ $customer->ip_address ? 'bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white dark:bg-sky-950/40 dark:hover:bg-sky-600 dark:text-sky-300 dark:hover:text-white border-sky-200/80 dark:border-sky-800/40' : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-700' }} rounded-lg border transition-all text-[11px] font-medium flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-sky-400 min-h-[36px]"
+                                            title="{{ $customer->ip_address ? 'Diagnostic Ping ' . $customer->ip_address : 'Diagnostic Ping (Belum ada IP, klik untuk atur)' }}">
+                                        <i class="fa-solid fa-bolt text-[10px]"></i> Ping
+                                    </button>
 
                                     <!-- Buat Tiket Gangguan -->
                                     <button type="button" 
@@ -445,10 +473,20 @@
                                 <i class="fa-solid fa-sitemap text-[9px]"></i> {{ $customer->odp_name }}
                             </span>
                         @endif
+                        @if($customer->pppoe_user)
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/40 font-mono" title="PPPoE: {{ $customer->pppoe_user }}">
+                                <i class="fa-solid fa-user-shield text-[9px]"></i> {{ $customer->pppoe_user }}
+                            </span>
+                        @endif
+                        @if($customer->ip_address)
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/40 font-mono" title="IP: {{ $customer->ip_address }}">
+                                <i class="fa-solid fa-network-wired text-[9px]"></i> {{ $customer->ip_address }}
+                            </span>
+                        @endif
                     </div>
 
                     <!-- Action Buttons -->
-                    <div class="grid grid-cols-3 gap-2 pt-1">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                         @if($phoneClean)
                             <a href="https://wa.me/{{ $phoneClean }}" target="_blank"
                                class="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white dark:bg-emerald-950/40 dark:hover:bg-emerald-600 dark:text-emerald-300 dark:hover:text-white rounded-xl border border-emerald-200/80 dark:border-emerald-800/40 text-xs font-semibold transition-all min-h-[44px]">
@@ -470,6 +508,14 @@
                                 <i class="fa-solid fa-map-location-dot text-sm"></i> Maps
                             </button>
                         @endif
+
+                        <!-- Ping Touch Action -->
+                        <button type="button" 
+                                onclick="openPingModal({{ $customer->id }}, '{{ addslashes($customer->name ?? $customer->customer_name) }}', '{{ $customer->no_services }}', '{{ $customer->ip_address ?? '' }}', '{{ addslashes($customer->pppoe_user ?? '') }}')"
+                                class="flex items-center justify-center gap-1.5 px-3 py-2.5 {{ $customer->ip_address ? 'bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white dark:bg-sky-950/40 dark:hover:bg-sky-600 dark:text-sky-300 dark:hover:text-white border-sky-200/80 dark:border-sky-800/40' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700' }} rounded-xl border text-xs font-semibold transition-all min-h-[44px]"
+                                title="Diagnostic Ping">
+                            <i class="fa-solid fa-bolt text-xs"></i> Ping
+                        </button>
 
                         <button type="button" 
                                 onclick="openCreateTicketForCustomer('{{ $customer->no_services }}', '{{ addslashes($customer->name ?? $customer->customer_name) }}', '{{ $customer->phone ?? $customer->customer_phone }}', '{{ addslashes($customer->address ?? $customer->customer_address) }}', '{{ $customer->billing_node_id ?? $customer->billing_instance_id }}')"
@@ -558,15 +604,193 @@
     </div>
 </div>
 
+<!-- Modal Interactive Diagnostic Ping Pelanggan -->
+<div id="pingDiagnosticModal" class="hidden fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm" onclick="closePingModal()"></div>
+    <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto z-10 transition-colors">
+        <!-- Header -->
+        <div class="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 rounded-t-3xl sm:rounded-t-2xl flex items-center justify-between z-10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
+                    <i class="fa-solid fa-tower-broadcast text-base"></i>
+                </div>
+                <div>
+                    <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>Diagnostic Ping</span>
+                        <span id="ping_header_no_services" class="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 font-bold"></span>
+                    </h2>
+                    <p id="ping_header_customer_name" class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs"></p>
+                </div>
+            </div>
+            <button onclick="closePingModal()" 
+                    class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-white flex items-center justify-center transition-all border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    aria-label="Tutup modal ping">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-4 sm:p-5 space-y-4">
+            <!-- Target IP & MikroTik Live Status Strip -->
+            <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Alamat IP (PPPoE / Queue MikroTik)</div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span id="ping_display_ip" class="font-mono font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100">-</span>
+                            <button type="button" id="ping_copy_ip_btn" onclick="copyTargetIp()" class="hidden text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors p-1" title="Salin IP">
+                                <i class="fa-regular fa-copy text-xs"></i>
+                            </button>
+                            <span id="ping_ip_badge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40">MikroTik Live</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="ping_btn_action" onclick="executePing()"
+                                class="w-full sm:w-auto px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-sm shadow-sky-600/20 transition-all flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-sky-400 min-h-[38px] flex-shrink-0">
+                            <i class="fa-solid fa-bolt" id="ping_btn_icon"></i>
+                            <span id="ping_btn_text">Mulai Ping</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MikroTik Live Session Meta Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px]">
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 text-[10px] block">PPPoE / Static:</span>
+                        <span id="ping_target_pppoe" class="font-mono font-semibold text-slate-800 dark:text-slate-200 truncate block">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 text-[10px] block">Router Gateway:</span>
+                        <span id="ping_target_router" class="font-semibold text-slate-800 dark:text-slate-200 truncate block">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 text-[10px] block">Uptime Sesi:</span>
+                        <span id="ping_target_uptime" class="font-mono text-slate-800 dark:text-slate-200 truncate block">-</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 text-[10px] block">Caller ID / MAC:</span>
+                        <span id="ping_target_caller" class="font-mono text-slate-800 dark:text-slate-200 truncate block">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ping Status Banner -->
+            <div id="ping_status_banner" class="p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                <div id="ping_status_icon_wrap" class="w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 text-slate-600 dark:text-slate-300">
+                    <i id="ping_status_icon" class="fa-solid fa-circle-info text-base"></i>
+                </div>
+                <div>
+                    <div id="ping_status_title" class="font-bold text-xs sm:text-sm">Siap Melakukan Diagnostic Ping</div>
+                    <div id="ping_status_subtitle" class="text-[11px] text-slate-500 dark:text-slate-400">Tekan "Mulai Ping" untuk menguji konektivitas 3 paket ICMP echo.</div>
+                </div>
+            </div>
+
+            <!-- Metrics Card Grid (3 Cols) -->
+            <div class="grid grid-cols-3 gap-2.5 sm:gap-3">
+                <!-- Latensi Rata-rata -->
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-center">
+                    <div class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Latensi Rata-rata</div>
+                    <div id="ping_metric_latency" class="text-lg sm:text-xl font-mono font-bold text-slate-800 dark:text-slate-100 mt-1">-</div>
+                    <div id="ping_metric_latency_sub" class="text-[10px] text-slate-400 mt-0.5">Round-Trip Time</div>
+                </div>
+
+                <!-- Packet Loss -->
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-center">
+                    <div class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Packet Loss</div>
+                    <div id="ping_metric_loss" class="text-lg sm:text-xl font-mono font-bold text-slate-800 dark:text-slate-100 mt-1">-</div>
+                    <div id="ping_metric_loss_sub" class="text-[10px] text-slate-400 mt-0.5">3 ICMP Packets</div>
+                </div>
+
+                <!-- Durasi Uji -->
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-center">
+                    <div class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Min / Max</div>
+                    <div id="ping_metric_minmax" class="text-xs sm:text-sm font-mono font-bold text-slate-800 dark:text-slate-100 mt-2 truncate">-</div>
+                    <div id="ping_metric_minmax_sub" class="text-[10px] text-slate-400 mt-0.5">Rentang respon</div>
+                </div>
+            </div>
+
+            <!-- Raw Diagnostic Console -->
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1">
+                    <span class="font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-terminal text-[10px] text-emerald-500"></i> Terminal Output ICMP
+                    </span>
+                    <button type="button" onclick="copyPingOutput()" 
+                            class="hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors flex items-center gap-1">
+                        <i class="fa-regular fa-copy text-[10px]"></i> Salin Output
+                    </button>
+                </div>
+                <div class="relative bg-slate-950 text-slate-200 p-3.5 rounded-xl border border-slate-800 font-mono text-[11px] leading-relaxed overflow-x-auto min-h-[90px] max-h-48">
+                    <pre id="ping_raw_output" class="whitespace-pre-wrap">Menunggu pengujian...</pre>
+                </div>
+            </div>
+
+            <!-- Footer / Action Row -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-shield-halved text-emerald-500 text-xs"></i>
+                    <span>Dilindungi anti-injeksi shell & rate-limit</span>
+                </div>
+                <div class="flex items-center justify-end gap-2">
+                    <button type="button" onclick="closePingModal()" 
+                            class="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium border border-slate-200 dark:border-slate-700 transition-all min-h-[40px] flex items-center justify-center">
+                        Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Floating Toast Notification -->
+<div id="appToast" class="fixed bottom-5 right-5 z-[80] hidden transform transition-all duration-300 translate-y-2 opacity-0 pointer-events-none">
+    <div class="flex items-center gap-2.5 px-4 py-3 bg-slate-900 dark:bg-slate-800 text-white text-xs font-semibold rounded-2xl shadow-xl border border-slate-700">
+        <i id="appToastIcon" class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+        <span id="appToastMsg">Notifikasi</span>
+    </div>
+</div>
+
 <script>
+let currentPingCustomerId = null;
+let currentPingCustomerName = '';
+let currentPingNoServices = '';
+let currentPingIpAddress = '';
+let currentPingPppoe = '';
+
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-        const modal = document.getElementById('quickTicketModal');
-        if (modal && !modal.classList.contains('hidden')) {
-            modal.classList.add('hidden');
-        }
+        const modals = ['quickTicketModal', 'pingDiagnosticModal'];
+        modals.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el.classList.contains('hidden')) {
+                el.classList.add('hidden');
+            }
+        });
     }
 });
+
+function showToast(message, isSuccess = true) {
+    const toast = document.getElementById('appToast');
+    const msg = document.getElementById('appToastMsg');
+    const icon = document.getElementById('appToastIcon');
+    if (!toast || !msg) return;
+
+    msg.innerText = message;
+    if (isSuccess) {
+        icon.className = 'fa-solid fa-circle-check text-emerald-400 text-sm';
+    } else {
+        icon.className = 'fa-solid fa-circle-exclamation text-rose-400 text-sm';
+    }
+
+    toast.classList.remove('hidden', 'translate-y-2', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-2', 'opacity-0');
+        setTimeout(() => toast.classList.add('hidden'), 300);
+    }, 2500);
+}
 
 function openCreateTicketForCustomer(noServices, name, phone, address, billingId) {
     document.getElementById('qt_no_services').value = noServices || '';
@@ -576,6 +800,231 @@ function openCreateTicketForCustomer(noServices, name, phone, address, billingId
     document.getElementById('qt_billing_id').value = billingId || '1';
 
     document.getElementById('quickTicketModal').classList.remove('hidden');
+}
+
+function copyTargetIp() {
+    if (currentPingIpAddress) {
+        navigator.clipboard.writeText(currentPingIpAddress);
+        showToast('Alamat IP berhasil disalin');
+    }
+}
+
+function copyPingOutput() {
+    const raw = document.getElementById('ping_raw_output').innerText;
+    navigator.clipboard.writeText(raw);
+    showToast('Output ping berhasil disalin ke clipboard');
+}
+
+function openPingModal(customerId, customerName, noServices, ipAddress, pppoeUser) {
+    currentPingCustomerId = customerId;
+    currentPingCustomerName = customerName;
+    currentPingNoServices = noServices;
+    currentPingIpAddress = ipAddress || '';
+    currentPingPppoe = pppoeUser || '';
+
+    document.getElementById('ping_header_no_services').innerText = noServices || '-';
+    document.getElementById('ping_header_customer_name').innerText = customerName || 'Pelanggan';
+
+    const displayIp = document.getElementById('ping_display_ip');
+    const copyIpBtn = document.getElementById('ping_copy_ip_btn');
+    const badge = document.getElementById('ping_ip_badge');
+
+    if (ipAddress && ipAddress.trim() !== '') {
+        displayIp.innerText = ipAddress;
+        copyIpBtn.classList.remove('hidden');
+        badge.classList.remove('hidden');
+    } else {
+        displayIp.innerText = 'Mencari dari MikroTik...';
+        copyIpBtn.classList.add('hidden');
+        badge.classList.add('hidden');
+    }
+
+    document.getElementById('ping_target_pppoe').innerText = pppoeUser || '-';
+    document.getElementById('ping_target_router').innerText = '-';
+    document.getElementById('ping_target_uptime').innerText = '-';
+    document.getElementById('ping_target_caller').innerText = '-';
+
+    resetPingUI();
+    document.getElementById('pingDiagnosticModal').classList.remove('hidden');
+
+    // Automatically trigger live ping test & MikroTik check
+    executePing();
+}
+
+function closePingModal() {
+    const modal = document.getElementById('pingDiagnosticModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function resetPingUI() {
+    const banner = document.getElementById('ping_status_banner');
+    const icon = document.getElementById('ping_status_icon');
+    const iconWrap = document.getElementById('ping_status_icon_wrap');
+    const title = document.getElementById('ping_status_title');
+    const subtitle = document.getElementById('ping_status_subtitle');
+
+    banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300';
+    iconWrap.className = 'w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 text-slate-600 dark:text-slate-300';
+    icon.className = 'fa-solid fa-circle-info text-base';
+    title.innerText = 'Siap Melakukan Diagnostic Ping';
+    subtitle.innerText = 'Memeriksa sesi aktif di router MikroTik dan menguji konektivitas ICMP echo...';
+
+    document.getElementById('ping_metric_latency').innerText = '-';
+    document.getElementById('ping_metric_loss').innerText = '-';
+    document.getElementById('ping_metric_minmax').innerText = '-';
+    document.getElementById('ping_raw_output').innerText = 'Menunggu proses pengujian...';
+
+    const btn = document.getElementById('ping_btn_action');
+    const btnIcon = document.getElementById('ping_btn_icon');
+    const btnText = document.getElementById('ping_btn_text');
+    btn.disabled = false;
+    btnIcon.className = 'fa-solid fa-bolt';
+    btnText.innerText = 'Mulai Ping';
+}
+
+async function executePing() {
+    if (!currentPingCustomerId) return;
+
+    const banner = document.getElementById('ping_status_banner');
+    const icon = document.getElementById('ping_status_icon');
+    const iconWrap = document.getElementById('ping_status_icon_wrap');
+    const title = document.getElementById('ping_status_title');
+    const subtitle = document.getElementById('ping_status_subtitle');
+    const btn = document.getElementById('ping_btn_action');
+    const btnIcon = document.getElementById('ping_btn_icon');
+    const btnText = document.getElementById('ping_btn_text');
+    const rawOutput = document.getElementById('ping_raw_output');
+
+    // Loading state
+    btn.disabled = true;
+    btnIcon.className = 'fa-solid fa-spinner fa-spin';
+    btnText.innerText = 'Memeriksa...';
+
+    banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-300 animate-pulse';
+    iconWrap.className = 'w-9 h-9 rounded-lg bg-sky-200 dark:bg-sky-900/60 flex items-center justify-center flex-shrink-0 text-sky-600 dark:text-sky-300';
+    icon.className = 'fa-solid fa-arrows-rotate fa-spin text-base';
+    title.innerText = 'Memeriksa sesi MikroTik & menjalankan ICMP Ping...';
+    subtitle.innerText = 'Mencari sesi aktif di router MikroTik dan menghitung latensi jaringan...';
+
+    rawOutput.innerText = `Menghubungi router gateway MikroTik...\nMemeriksa active connection / queue untuk ${currentPingNoServices}...\nMohon tunggu...`;
+
+    try {
+        const response = await fetch(`/customers/${currentPingCustomerId}/ping`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ ip_address: currentPingIpAddress || null })
+        });
+
+        const data = await response.json();
+
+        btn.disabled = false;
+        btnIcon.className = 'fa-solid fa-rotate';
+        btnText.innerText = 'Ping Ulang';
+
+        // Check if customer is offline on MikroTik
+        if (data.status === 'offline_mikrotik') {
+            banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300';
+            iconWrap.className = 'w-9 h-9 rounded-lg bg-rose-200 dark:bg-rose-900/60 flex items-center justify-center flex-shrink-0 text-rose-600 dark:text-rose-300';
+            icon.className = 'fa-solid fa-circle-xmark text-base';
+            title.innerText = 'OFFLINE DI MIKROTIK';
+            subtitle.innerText = data.message || 'Sesi PPPoE / Simple Queue tidak aktif di router.';
+
+            document.getElementById('ping_display_ip').innerText = 'Tidak Ada Sesi Aktif';
+            document.getElementById('ping_copy_ip_btn').classList.add('hidden');
+            document.getElementById('ping_ip_badge').classList.add('hidden');
+
+            if (data.session) {
+                document.getElementById('ping_target_pppoe').innerText = data.session.pppoe_user || data.session.user_mikrotik || '-';
+                document.getElementById('ping_target_router').innerText = data.session.router_alias || '-';
+                document.getElementById('ping_target_uptime').innerText = data.session.last_disconnect ? `Disc: ${data.session.last_disconnect}` : 'Offline';
+                document.getElementById('ping_target_caller').innerText = data.session.caller_id || '-';
+            }
+
+            document.getElementById('ping_metric_latency').innerText = '-';
+            document.getElementById('ping_metric_loss').innerText = '100%';
+            document.getElementById('ping_metric_minmax').innerText = 'Offline';
+            rawOutput.innerText = `Status: OFFLINE MIKROTIK\n${data.message}\nPelanggan tidak memiliki active connection atau queue di MikroTik.`;
+            showToast('Pelanggan offline di MikroTik', false);
+            return;
+        }
+
+        if (!response.ok || !data.success) {
+            banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300';
+            iconWrap.className = 'w-9 h-9 rounded-lg bg-rose-200 dark:bg-rose-900/60 flex items-center justify-center flex-shrink-0 text-rose-600 dark:text-rose-300';
+            icon.className = 'fa-solid fa-triangle-exclamation text-base';
+            title.innerText = 'Pengujian Gagal';
+            subtitle.innerText = data.message || 'Terjadi kesalahan saat mengeksekusi ping.';
+            rawOutput.innerText = data.message || 'Error occurred';
+            showToast(data.message || 'Gagal melakukan ping', false);
+            return;
+        }
+
+        // Populate customer & session details from live discovery
+        if (data.customer && data.customer.ip_address) {
+            currentPingIpAddress = data.customer.ip_address;
+            document.getElementById('ping_display_ip').innerText = data.customer.ip_address;
+            document.getElementById('ping_copy_ip_btn').classList.remove('hidden');
+            document.getElementById('ping_ip_badge').classList.remove('hidden');
+        }
+
+        if (data.session) {
+            document.getElementById('ping_target_pppoe').innerText = data.session.pppoe_user || data.session.user_mikrotik || currentPingPppoe || '-';
+            document.getElementById('ping_target_router').innerText = data.session.router_alias || '-';
+            document.getElementById('ping_target_uptime').innerText = data.session.uptime || 'Aktif';
+            document.getElementById('ping_target_caller').innerText = data.session.caller_id || '-';
+        }
+
+        const res = data.result;
+        rawOutput.innerText = res.raw_output || 'Tidak ada output mentah.';
+
+        // Metrics
+        document.getElementById('ping_metric_latency').innerText = res.latency_ms !== null ? `${res.latency_ms} ms` : '-';
+        document.getElementById('ping_metric_loss').innerText = res.packet_loss_pct !== null ? `${res.packet_loss_pct}%` : '-';
+
+        if (res.min_latency_ms !== null && res.max_latency_ms !== null) {
+            document.getElementById('ping_metric_minmax').innerText = `${res.min_latency_ms}ms / ${res.max_latency_ms}ms`;
+        } else {
+            document.getElementById('ping_metric_minmax').innerText = `${res.duration_ms} ms`;
+        }
+
+        if (res.status === 'online') {
+            banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300';
+            iconWrap.className = 'w-9 h-9 rounded-lg bg-emerald-200 dark:bg-emerald-900/60 flex items-center justify-center flex-shrink-0 text-emerald-600 dark:text-emerald-300';
+            icon.className = 'fa-solid fa-circle-check text-base';
+            title.innerText = `ONLINE — Respon Normal (${res.latency_ms ?? 0} ms)`;
+            subtitle.innerText = `Semua paket ICMP diterima dengan baik tanpa packet loss (${res.packet_loss_pct ?? 0}% loss).`;
+            showToast(`Status: ONLINE (${res.latency_ms ?? 0} ms)`);
+        } else if (res.status === 'unstable') {
+            banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300';
+            iconWrap.className = 'w-9 h-9 rounded-lg bg-amber-200 dark:bg-amber-900/60 flex items-center justify-center flex-shrink-0 text-amber-600 dark:text-amber-300';
+            icon.className = 'fa-solid fa-triangle-exclamation text-base';
+            title.innerText = `UNSTABLE — Terdeteksi Packet Loss (${res.packet_loss_pct}%)`;
+            subtitle.innerText = `Sebagian paket hilang atau mengalami gangguan sinyal / redaman tinggi.`;
+            showToast(`Status: UNSTABLE (${res.packet_loss_pct}% loss)`, false);
+        } else {
+            banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300';
+            iconWrap.className = 'w-9 h-9 rounded-lg bg-rose-200 dark:bg-rose-900/60 flex items-center justify-center flex-shrink-0 text-rose-600 dark:text-rose-300';
+            icon.className = 'fa-solid fa-circle-xmark text-base';
+            title.innerText = `OFFLINE — Request Timed Out (100% Loss)`;
+            subtitle.innerText = `Tidak ada balasan dari modem/perangkat. Perangkat mungkin mati atau kabel FO putus.`;
+            showToast('Status: OFFLINE (RTO / Unreachable)', false);
+        }
+    } catch (err) {
+        btn.disabled = false;
+        btnIcon.className = 'fa-solid fa-rotate';
+        btnText.innerText = 'Ping Ulang';
+
+        banner.className = 'p-3.5 rounded-xl border flex items-center gap-3 transition-all bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300';
+        iconWrap.className = 'w-9 h-9 rounded-lg bg-rose-200 dark:bg-rose-900/60 flex items-center justify-center flex-shrink-0 text-rose-600 dark:text-rose-300';
+        icon.className = 'fa-solid fa-triangle-exclamation text-base';
+        title.innerText = 'Koneksi Gagal';
+        subtitle.innerText = err.message || 'Gagal menghubungi server Central.';
+        showToast('Koneksi server gagal', false);
+    }
 }
 </script>
 @endsection

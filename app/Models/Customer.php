@@ -21,6 +21,8 @@ class Customer extends Model
         'address',
         'odp_name',
         'port_number',
+        'ip_address',
+        'pppoe_user',
         'latitude',
         'longitude',
         'package_name',
@@ -122,7 +124,9 @@ class Customer extends Model
               ->orWhere('name', 'like', "%{$term}%")
               ->orWhere('phone', 'like', "%{$term}%")
               ->orWhere('address', 'like', "%{$term}%")
-              ->orWhere('odp_name', 'like', "%{$term}%");
+              ->orWhere('odp_name', 'like', "%{$term}%")
+              ->orWhere('ip_address', 'like', "%{$term}%")
+              ->orWhere('pppoe_user', 'like', "%{$term}%");
         });
     }
 }

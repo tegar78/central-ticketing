@@ -15,9 +15,19 @@ class CheckTenantApiKey
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $apiKey = $request->header('X-API-KEY') ?? $request->input('api_key');
+        $apiKey = $request->header('X-API-KEY');
+        if (!$apiKey && $request->bearerToken()) {
+            $apiKey = $request->bearerToken();
+        }
 
         if (!$apiKey) {
+            if ($request->has('api_key')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'API Key must be provided securely via X-API-KEY or Authorization Bearer header, not via query string or body.',
+                ], 400);
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'API Key is missing. Please provide X-API-KEY header.',

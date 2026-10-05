@@ -425,10 +425,10 @@
 
                                 @if($user->role === 'admin')
                                 <!-- Delete ODP -->
-                                <form action="{{ route('odp.destroy', $odp->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus data ODP {{ $odp->code_odp }}? Foto dan titik koordinat akan terhapus.')" class="inline">
+                                <form action="{{ route('odp.destroy', $odp->id) }}" method="POST" id="deleteOdpForm-{{ $odp->id }}" class="inline">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="w-7 h-7 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 dark:text-rose-400 flex items-center justify-center transition-colors" title="Hapus ODP">
+                                    <button type="button" onclick="confirmDeleteOdp('{{ $odp->id }}', '{{ addslashes($odp->code_odp) }}')" class="w-7 h-7 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 dark:text-rose-400 flex items-center justify-center transition-colors" title="Hapus ODP">
                                         <i class="fa-solid fa-trash text-xs"></i>
                                     </button>
                                 </form>
@@ -1398,16 +1398,25 @@ function renderUnassignedCustomers(unassigned, canEdit) {
         item.className = 'inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 text-[11px] text-slate-800 dark:text-slate-200';
         item.innerHTML = `
             <span>${c.billing_node ? `<strong class="text-indigo-600 dark:text-indigo-400 font-mono">[${escapeHtml(c.billing_node.tenant_code)}]</strong> ` : ''}<strong>${escapeHtml(c.name)}</strong> (${escapeHtml(c.no_services)})</span>
-            ${canEdit ? `<button type="button" onclick="quickAssignUnassigned(${c.id}, '${escapeHtml(c.name)}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Pilih Port</button>` : ''}
+            ${canEdit ? `<button type="button" data-cust-id="${c.id}" data-cust-name="${escapeHtml(c.name)}" onclick="quickAssignUnassigned(this)" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Pilih Port</button>` : ''}
         `;
         list.appendChild(item);
     });
 }
 
-function quickAssignUnassigned(customerId, customerName) {
-    const port = prompt(`Masukkan nomor port (1-${document.getElementById('portsModalCapacity').textContent || '16'}) untuk [${customerName}]:`, '1');
+function quickAssignUnassigned(btn) {
+    const customerId = btn.dataset.custId;
+    const customerName = btn.dataset.custName;
+    const maxCap = parseInt(document.getElementById('portsModalCapacity').textContent || '16');
+
+    const port = prompt(`Masukkan nomor port (1-${maxCap}) untuk [${customerName}]:`, '1');
     if (!port) return;
-    executeAssignCustomerToPort(parseInt(port), customerId);
+    const pNum = parseInt(port);
+    if (isNaN(pNum) || pNum < 1 || pNum > maxCap) {
+        showToast(`Nomor port harus berupa angka antara 1 dan ${maxCap}.`, 'warning');
+        return;
+    }
+    executeAssignCustomerToPort(pNum, customerId);
 }
 
 // ==========================================
@@ -1456,9 +1465,17 @@ function searchCustomersForPort(query) {
             const div = document.createElement('div');
             div.className = 'p-3 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 flex items-center justify-between gap-3 cursor-pointer transition-colors';
             div.onclick = () => {
-                if (confirm(`Pasang pelanggan [${c.name}] (${c.no_services}) ke Port #${currentTargetPortNumber}?`)) {
-                    executeAssignCustomerToPort(currentTargetPortNumber, c.id);
-                }
+                window.confirmAction({
+                    title: 'Pasang Pelanggan ke Port',
+                    message: `Pasang pelanggan [${c.name}] (${c.no_services}) ke Port #${currentTargetPortNumber}?`,
+                    confirmText: 'Ya, Pasang ke Port',
+                    confirmClass: 'bg-emerald-600 hover:bg-emerald-500 text-white',
+                    icon: 'fa-solid fa-plug',
+                    iconBg: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400',
+                    onConfirm: () => {
+                        executeAssignCustomerToPort(currentTargetPortNumber, c.id);
+                    }
+                });
             };
 
             div.innerHTML = `
@@ -1505,48 +1522,56 @@ function executeAssignCustomerToPort(portNumber, customerId) {
     .then(res => res.json())
     .then(res => {
         if (!res.success) {
-            alert(res.message || 'Gagal memasang pelanggan ke port.');
+            showToast(res.message || 'Gagal memasang pelanggan ke port.', 'error');
             return;
         }
 
+        showToast(res.message || 'Pelanggan berhasil dipasang ke port.', 'success');
         closeAssignPortModal();
         loadOdpPortsData(currentActiveOdpId);
     })
     .catch(err => {
-        alert('Terjadi kesalahan jaringan: ' + err.message);
+        showToast('Terjadi kesalahan jaringan: ' + err.message, 'error');
     });
 }
 
 function detachCustomerPort(portNumber, customerName) {
     if (!canEditPorts) return;
-    if (!confirm(`Apakah Anda yakin ingin melepas pelanggan [${customerName}] dari Port #${portNumber}?`)) {
-        return;
-    }
+    window.confirmAction({
+        title: 'Lepas Pelanggan dari Port',
+        message: `Apakah Anda yakin ingin melepas pelanggan [${customerName}] dari Port #${portNumber}?`,
+        confirmText: 'Ya, Lepas Port',
+        confirmClass: 'bg-rose-600 hover:bg-rose-500 text-white',
+        icon: 'fa-solid fa-triangle-exclamation',
+        iconBg: 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400',
+        onConfirm: () => {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
+                || document.querySelector('input[name="_token"]')?.value;
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
-        || document.querySelector('input[name="_token"]')?.value;
-
-    fetch(`/maps/odp/${currentActiveOdpId}/detach-port`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': csrfToken,
-            'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-            port_number: portNumber
-        })
-    })
-    .then(res => res.json())
-    .then(res => {
-        if (!res.success) {
-            alert(res.message || 'Gagal melepas pelanggan dari port.');
-            return;
+            fetch(`/maps/odp/${currentActiveOdpId}/detach-port`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    port_number: portNumber
+                })
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (!res.success) {
+                    showToast(res.message || 'Gagal melepas pelanggan dari port.', 'error');
+                    return;
+                }
+                showToast(res.message || `Pelanggan berhasil dilepas dari Port #${portNumber}.`, 'success');
+                loadOdpPortsData(currentActiveOdpId);
+            })
+            .catch(err => {
+                showToast('Terjadi kesalahan jaringan: ' + err.message, 'error');
+            });
         }
-        loadOdpPortsData(currentActiveOdpId);
-    })
-    .catch(err => {
-        alert('Terjadi kesalahan jaringan: ' + err.message);
     });
 }
 
@@ -1558,6 +1583,21 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function confirmDeleteOdp(id, code) {
+    window.confirmAction({
+        title: 'Hapus Master ODP',
+        message: `Apakah Anda yakin ingin menghapus data ODP [${code}]? Seluruh foto fisik dan titik koordinat akan terhapus permanen dari sistem.`,
+        confirmText: 'Ya, Hapus ODP',
+        confirmClass: 'bg-rose-600 hover:bg-rose-500 text-white',
+        icon: 'fa-solid fa-trash',
+        iconBg: 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400',
+        onConfirm: () => {
+            const form = document.getElementById(`deleteOdpForm-${id}`);
+            if (form) form.submit();
+        }
+    });
 }
 </script>
 @endpush

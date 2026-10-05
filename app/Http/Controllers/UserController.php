@@ -94,6 +94,16 @@ class UserController extends Controller implements HasMiddleware
             'password' => 'nullable|string|min:6',
         ]);
 
+        // Prevent logged-in administrator from locking themselves out
+        if ($user->id === Auth::id()) {
+            if (!$validated['is_active']) {
+                return back()->with('error', 'Anda tidak dapat menonaktifkan akun Anda sendiri.');
+            }
+            if ($validated['role'] !== 'admin') {
+                return back()->with('error', 'Anda tidak dapat mengubah role Administrator pada akun Anda sendiri.');
+            }
+        }
+
         $updateData = [
             'name' => $validated['name'],
             'email' => $validated['email'],

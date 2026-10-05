@@ -208,6 +208,9 @@ class SyncBillingCustomersCommand extends Command
                 ? (int) $cust['no_port_odp'] 
                 : (!empty($cust['port_number']) ? (int) $cust['port_number'] : null);
 
+            $ipAddress = !empty($cust['ip_address']) ? (string) $cust['ip_address'] : (!empty($cust['ip']) ? (string) $cust['ip'] : (!empty($cust['ip_local']) ? (string) $cust['ip_local'] : null));
+            $pppoeUser = !empty($cust['pppoe_user']) ? (string) $cust['pppoe_user'] : (!empty($cust['user_mikrotik']) ? (string) $cust['user_mikrotik'] : (!empty($cust['username']) ? (string) $cust['username'] : null));
+
             $upsertData[] = [
                 'billing_node_id'    => $tenant->id,
                 'remote_customer_id' => (int) $remoteId,
@@ -217,6 +220,8 @@ class SyncBillingCustomersCommand extends Command
                 'address'            => isset($cust['address']) ? trim($cust['address']) : null,
                 'odp_name'           => $finalOdpName,
                 'port_number'        => $portNumber,
+                'ip_address'         => $ipAddress,
+                'pppoe_user'         => $pppoeUser,
                 'latitude'           => isset($cust['latitude']) ? (string) $cust['latitude'] : null,
                 'longitude'          => isset($cust['longitude']) ? (string) $cust['longitude'] : null,
                 'package_name'       => $cust['package_name'] ?? $cust['user_profile'] ?? null,
@@ -247,7 +252,7 @@ class SyncBillingCustomersCommand extends Command
         Customer::upsert(
             $upsertData,
             ['billing_node_id', 'remote_customer_id'],
-            ['no_services', 'name', 'phone', 'address', 'odp_name', 'port_number', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
+            ['no_services', 'name', 'phone', 'address', 'odp_name', 'port_number', 'ip_address', 'pppoe_user', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
         );
 
         $this->info("  ✓ Berhasil menyimpan " . count($upsertData) . " pelanggan ke database Central.");
@@ -288,6 +293,7 @@ class SyncBillingCustomersCommand extends Command
                 'customer.longitude',
                 'customer.user_profile',
                 'customer.cust_amount',
+                'customer.user_mikrotik as pppoe_user',
                 'customer.id_odp',
                 'customer.no_port_odp',
                 'm_odp.code_odp as odp_code',
@@ -338,6 +344,8 @@ class SyncBillingCustomersCommand extends Command
                     'address'            => !empty($cust->address) ? trim((string) $cust->address) : null,
                     'odp_name'           => !empty($cust->odp_code) ? (string) $cust->odp_code : null,
                     'port_number'        => !empty($cust->no_port_odp) ? (int) $cust->no_port_odp : null,
+                    'ip_address'         => !empty($cust->ip_address) ? (string) $cust->ip_address : null,
+                    'pppoe_user'         => !empty($cust->pppoe_user) ? (string) $cust->pppoe_user : (!empty($cust->user_mikrotik) ? (string) $cust->user_mikrotik : null),
                     'latitude'           => !empty($cust->latitude) ? (string) $cust->latitude : null,
                     'longitude'          => !empty($cust->longitude) ? (string) $cust->longitude : null,
                     'package_name'       => !empty($cust->user_profile) ? (string) $cust->user_profile : null,
@@ -351,7 +359,7 @@ class SyncBillingCustomersCommand extends Command
             Customer::upsert(
                 $upsertData,
                 ['billing_node_id', 'remote_customer_id'],
-                ['no_services', 'name', 'phone', 'address', 'odp_name', 'port_number', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
+                ['no_services', 'name', 'phone', 'address', 'odp_name', 'port_number', 'ip_address', 'pppoe_user', 'latitude', 'longitude', 'package_name', 'monthly_fee', 'status', 'updated_at']
             );
 
             $syncedCount += count($upsertData);

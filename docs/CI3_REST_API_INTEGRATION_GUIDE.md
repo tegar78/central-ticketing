@@ -127,6 +127,8 @@ Mendukung pengiriman data pelanggan **satuan** (saat tambah/update pelanggan bar
   "longitude": "112.768845",
   "package_name": "Paket 50 Mbps",
   "monthly_fee": 250000,
+  "ip_address": "192.168.10.15",
+  "pppoe_user": "budi_santoso@net",
   "status": "active"
 }
 ```
@@ -140,6 +142,8 @@ Mendukung pengiriman data pelanggan **satuan** (saat tambah/update pelanggan bar
     "name": "Budi Santoso",
     "phone": "081234567890",
     "address": "Jl. Mawar No. 12",
+    "ip_address": "192.168.10.15",
+    "pppoe_user": "budi_santoso@net",
     "status": "active"
   },
   {
@@ -148,6 +152,8 @@ Mendukung pengiriman data pelanggan **satuan** (saat tambah/update pelanggan bar
     "name": "Siti Rahma",
     "phone": "081234567891",
     "address": "Jl. Melati No. 5",
+    "ip_address": "192.168.10.16",
+    "pppoe_user": "siti_rahma@net",
     "status": "isolated"
   }
 ]

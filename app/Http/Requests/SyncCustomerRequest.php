@@ -38,6 +38,8 @@ class SyncCustomerRequest extends FormRequest
                 '*.status' => 'nullable|in:active,isolated,inactive',
                 '*.port_number' => 'nullable|integer',
                 '*.no_port_odp' => 'nullable|integer',
+                '*.ip_address' => 'nullable|string|max:45',
+                '*.pppoe_user' => 'nullable|string|max:128',
             ];
         }
 
@@ -56,6 +58,8 @@ class SyncCustomerRequest extends FormRequest
             'status' => 'nullable|in:active,isolated,inactive',
             'port_number' => 'nullable|integer',
             'no_port_odp' => 'nullable|integer',
+            'ip_address' => 'nullable|string|max:45',
+            'pppoe_user' => 'nullable|string|max:128',
         ];
     }
 }

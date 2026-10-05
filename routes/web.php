@@ -41,6 +41,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/customers/live-search', [CustomerController::class, 'liveSearch'])->name('customers.liveSearch');
     Route::post('/customers/sync-billing', [CustomerController::class, 'syncBilling'])->name('customers.syncBilling');
     Route::get('/billing-instances/{id}/customers', [CustomerController::class, 'getBillingCustomers'])->name('billing.customers');
+    Route::post('/customers/{customer}/ping', [CustomerController::class, 'ping'])->name('customers.ping')->middleware('throttle:30,1');
+    Route::put('/customers/{customer}/network', [CustomerController::class, 'updateNetworkInfo'])->name('customers.updateNetwork');
     Route::post('/customers/{id}/coordinates', [MapController::class, 'updateCoordinates'])->name('customers.updateCoordinates');
 
     // Maps Location Pelanggan (Synchronized from Billtest)

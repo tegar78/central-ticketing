@@ -160,10 +160,10 @@
                                 </button>
 
                                 @if($user->id !== auth()->id())
-                                <form action="{{ route('users.destroy', $user->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus user ini?')" class="inline">
+                                <form action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="min-h-[34px] min-w-[34px] p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-rose-950/40 rounded-lg transition border border-transparent hover:border-rose-200 dark:hover:border-rose-800/40 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-rose-400" title="Hapus User">
+                                    <button type="button" onclick="confirmDeleteUser(this.form, '{{ addslashes($user->name) }}')" class="min-h-[34px] min-w-[34px] p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-rose-950/40 rounded-lg transition border border-transparent hover:border-rose-200 dark:hover:border-rose-800/40 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-rose-400" title="Hapus User">
                                         <i class="fa-solid fa-trash-can"></i>
                                     </button>
                                 </form>
@@ -249,10 +249,10 @@
                         </button>
 
                         @if($user->id !== auth()->id())
-                        <form action="{{ route('users.destroy', $user->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus user ini?')" class="inline">
+                        <form action="{{ route('users.destroy', $user->id) }}" method="POST" class="inline">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="min-h-[38px] p-2 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 rounded-xl transition border border-rose-200 dark:border-rose-800/50 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-rose-400" title="Hapus User">
+                            <button type="button" onclick="confirmDeleteUser(this.form, '{{ addslashes($user->name) }}')" class="min-h-[38px] p-2 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 rounded-xl transition border border-rose-200 dark:border-rose-800/50 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-rose-400" title="Hapus User">
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>
                         </form>
@@ -418,6 +418,20 @@
     }
     function closeEditModal() {
         document.getElementById('editModal').classList.add('hidden');
+    }
+
+    function confirmDeleteUser(form, userName) {
+        window.confirmAction({
+            title: 'Hapus Akun Pengguna',
+            message: `Apakah Anda yakin ingin menghapus akun [${userName}]? Akses user ini ke sistem akan dicabut dan data dihapus permanen.`,
+            confirmText: 'Ya, Hapus User',
+            confirmClass: 'bg-rose-600 hover:bg-rose-500 text-white',
+            icon: 'fa-solid fa-user-xmark',
+            iconBg: 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400',
+            onConfirm: () => {
+                form.submit();
+            }
+        });
     }
 </script>
 @endsection

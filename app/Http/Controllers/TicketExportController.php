@@ -87,7 +87,7 @@ class TicketExportController extends Controller
 
             // Data Rows
             foreach ($tickets as $index => $ticket) {
-                fputcsv($handle, [
+                $row = [
                     $index + 1,
                     $ticket->created_at->format('Y-m-d H:i:s'),
                     $ticket->ticket_number,
@@ -101,7 +101,20 @@ class TicketExportController extends Controller
                     $ticket->assignedTechnician->name ?? 'Belum Ditugaskan',
                     strtoupper($ticket->status),
                     $ticket->closed_at ? $ticket->closed_at->format('Y-m-d H:i:s') : '-'
-                ]);
+                ];
+
+                // Sanitize formula characters (=, +, -, @) to prevent CSV Injection in Excel
+                $sanitizedRow = array_map(function ($val) {
+                    if (is_string($val)) {
+                        $trimmed = ltrim($val);
+                        if ($trimmed !== '' && in_array($trimmed[0], ['=', '+', '-', '@', "\t", "\r"])) {
+                            return "'" . $val;
+                        }
+                    }
+                    return $val;
+                }, $row);
+
+                fputcsv($handle, $sanitizedRow);
             }
 
             fclose($handle);

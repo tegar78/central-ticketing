@@ -29,11 +29,20 @@ class AuthController extends Controller
         $credentials = [
             $field => $loginInput,
             'password' => $request->input('password'),
+            'is_active' => true,
         ];
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
             return redirect()->intended(route('dashboard'));
+        }
+
+        // Check if user exists and is inactive to provide precise feedback
+        $inactiveUser = \App\Models\User::where($field, $loginInput)->first();
+        if ($inactiveUser && \Illuminate\Support\Facades\Hash::check($request->input('password'), $inactiveUser->password) && !$inactiveUser->is_active) {
+            return back()->withErrors([
+                'email' => 'Akun Anda dinonaktifkan oleh Administrator. Hubungi administrator untuk mengaktifkan kembali.',
+            ])->onlyInput('email');
         }
 
         return back()->withErrors([
