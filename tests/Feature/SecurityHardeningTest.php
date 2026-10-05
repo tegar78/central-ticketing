@@ -137,4 +137,83 @@ class SecurityHardeningTest extends TestCase
         $response->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
         $this->assertTrue($response->headers->has('Content-Security-Policy'));
     }
+
+    /**
+     * Test 7: User password requires minimum 8 characters
+     */
+    public function test_user_password_requires_minimum_eight_characters(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+        ]);
+
+        // Attempt creation with 6-character password should fail
+        $failResponse = $this->actingAs($admin)->post(route('users.store'), [
+            'name' => 'Weak Password User',
+            'email' => 'weak_' . time() . '@example.com',
+            'role' => 'operator',
+            'password' => '123456',
+        ]);
+        $failResponse->assertSessionHasErrors('password');
+
+        // Attempt creation with 8-character password should succeed
+        $passResponse = $this->actingAs($admin)->post(route('users.store'), [
+            'name' => 'Strong Password User',
+            'email' => 'strong_' . time() . '@example.com',
+            'role' => 'operator',
+            'password' => 'ValidPass123',
+        ]);
+        $passResponse->assertSessionHasNoErrors();
+    }
+
+    /**
+     * Test 8: CSV Export escapes formula characters to mitigate CSV/Formula Injection
+     */
+    public function test_csv_export_escapes_formula_characters(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+        ]);
+
+        $tenant = BillingInstance::first() ?? BillingInstance::create([
+            'tenant_code' => 'BILL-CSV-TEST',
+            'name' => 'CSV Test Tenant',
+            'api_key' => 'csv-test-key-12345',
+            'is_active' => true,
+        ]);
+
+        \App\Models\Ticket::create([
+            'ticket_number' => 'TKT-TEST-CSV-01',
+            'billing_instance_id' => $tenant->id,
+            'no_services' => '+62811122233',
+            'customer_name' => '=CMD|\' /C calc\'!A0',
+            'problem_description' => 'Test CSV formula escaping',
+            'status' => 'pending',
+            'created_by_name' => $admin->name,
+            'created_by_role' => $admin->role,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('tickets.export.csv'));
+        $response->assertStatus(200);
+
+        $content = $response->streamedContent();
+        // Formula triggers should be prefixed with single quote
+        $this->assertStringContainsString("'=CMD", $content);
+        $this->assertStringContainsString("'+62811122233", $content);
+    }
+
+    /**
+     * Test 9: CORS configuration is registered with strict headers and methods
+     */
+    public function test_cors_configuration_is_active(): void
+    {
+        $this->assertIsArray(config('cors.allowed_headers'));
+        $this->assertContains('X-API-KEY', config('cors.allowed_headers'));
+        $this->assertContains('Content-Type', config('cors.allowed_headers'));
+        $this->assertContains('GET', config('cors.allowed_methods'));
+        $this->assertContains('POST', config('cors.allowed_methods'));
+    }
 }
+

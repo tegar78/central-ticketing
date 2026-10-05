@@ -24,6 +24,10 @@ class SyncCustomerRequest extends FormRequest
     {
         // If request payload is a numeric array of objects (batch upload)
         if ($this->isJson() && is_array($this->json()->all()) && array_is_list($this->json()->all())) {
+            if (count($this->json()->all()) > 1000) {
+                abort(422, 'Ukuran batch data pelanggan terlalu besar. Maksimum 1000 pelanggan per permintaan sinkronisasi.');
+            }
+
             return [
                 '*.remote_customer_id' => 'required',
                 '*.no_services' => 'required|string|max:50',

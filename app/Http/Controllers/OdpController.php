@@ -223,8 +223,12 @@ class OdpController extends Controller
         $photoPath = null;
         if ($request->hasFile('photo') && $request->file('photo')->isValid()) {
             $file = $request->file('photo');
+            $extension = strtolower($file->guessExtension() ?: $file->extension() ?: 'jpg');
+            if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $extension = 'jpg';
+            }
             $cleanCode = Str::slug($normalizedCode, '_');
-            $fileName = $cleanCode . '_' . time() . '_' . Str::random(6) . '.' . $file->getClientOriginalExtension();
+            $fileName = $cleanCode . '_' . time() . '_' . Str::random(12) . '.' . $extension;
             $photoPath = $file->storeAs('odps', $fileName, 'public');
         }
 
@@ -361,8 +365,12 @@ class OdpController extends Controller
             }
 
             $file = $request->file('photo');
+            $extension = strtolower($file->guessExtension() ?: $file->extension() ?: 'jpg');
+            if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $extension = 'jpg';
+            }
             $cleanCode = Str::slug($odp->code_odp, '_');
-            $fileName = $cleanCode . '_' . time() . '_' . Str::random(6) . '.' . $file->getClientOriginalExtension();
+            $fileName = $cleanCode . '_' . time() . '_' . Str::random(12) . '.' . $extension;
             $photoPath = $file->storeAs('odps', $fileName, 'public');
 
             $odp->update(['photo_path' => $photoPath]);

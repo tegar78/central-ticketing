@@ -138,22 +138,39 @@ class DatabaseBackupService
         $port = $config['port'] ?? 3306;
         $db = $config['database'] ?? '';
         $user = $config['username'] ?? 'root';
-        $pass = $config['password'] ?? '';
+        $tempCnf = null;
+        $cnfArg = '';
 
-        $passwordArg = !empty($pass) ? "-p" . escapeshellarg($pass) : "";
+        if (!empty($pass)) {
+            $tempCnf = tempnam(sys_get_temp_dir(), 'mycnf_');
+            if ($tempCnf) {
+                $escapedPass = addcslashes($pass, '"\\');
+                file_put_contents($tempCnf, "[client]\npassword=\"{$escapedPass}\"\n");
+                @chmod($tempCnf, 0600);
+                $cnfArg = '--defaults-extra-file=' . escapeshellarg($tempCnf);
+            }
+        }
+
         $command = sprintf(
-            'mysqldump --host=%s --port=%s --user=%s %s %s > %s 2>&1',
+            'mysqldump %s --host=%s --port=%s --user=%s %s > %s 2>&1',
+            $cnfArg,
             escapeshellarg($host),
             escapeshellarg((string) $port),
             escapeshellarg($user),
-            $passwordArg,
             escapeshellarg($db),
             escapeshellarg($outputPath)
         );
 
         $output = [];
         $returnCode = 1;
-        @exec($command, $output, $returnCode);
+
+        try {
+            @exec($command, $output, $returnCode);
+        } finally {
+            if ($tempCnf && File::exists($tempCnf)) {
+                @unlink($tempCnf);
+            }
+        }
 
         if ($returnCode === 0 && File::exists($outputPath) && File::size($outputPath) > 100) {
             return true;

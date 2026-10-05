@@ -186,9 +186,9 @@ class CustomerController extends Controller
                     $domainUrl = rtrim($billingInstance->domain_url, '/');
                     foreach (["{$domainUrl}/central/customers", "{$domainUrl}/api/customers"] as $apiUrl) {
                         try {
-                            $response = Http::withoutVerifying()
-                                ->timeout(3)
-                                ->withHeaders([
+                            $verifySsl = (bool) env('BILLING_VERIFY_SSL', false);
+                            $client = $verifySsl ? Http::timeout(3) : Http::withoutVerifying()->timeout(3);
+                            $response = $client->withHeaders([
                                     'X-API-Key' => $billingInstance->api_key,
                                     'Accept'    => 'application/json',
                                 ])
@@ -356,8 +356,9 @@ class CustomerController extends Controller
         if ($billing && !empty($billing->domain_url)) {
             try {
                 $domainUrl = rtrim($billing->domain_url, '/');
-                $resp = Http::withoutVerifying()->timeout(4)
-                    ->withHeaders([
+                $verifySsl = (bool) env('BILLING_VERIFY_SSL', false);
+                $client = $verifySsl ? Http::timeout(4) : Http::withoutVerifying()->timeout(4);
+                $resp = $client->withHeaders([
                         'X-API-Key' => $billing->api_key,
                         'Accept'    => 'application/json',
                     ])

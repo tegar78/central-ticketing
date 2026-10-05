@@ -39,7 +39,7 @@ Route::middleware('auth')->group(function () {
     // Customer Data Routes
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::get('/customers/live-search', [CustomerController::class, 'liveSearch'])->name('customers.liveSearch');
-    Route::post('/customers/sync-billing', [CustomerController::class, 'syncBilling'])->name('customers.syncBilling');
+    Route::post('/customers/sync-billing', [CustomerController::class, 'syncBilling'])->name('customers.syncBilling')->middleware('throttle:10,1');
     Route::get('/billing-instances/{id}/customers', [CustomerController::class, 'getBillingCustomers'])->name('billing.customers');
     Route::post('/customers/{customer}/ping', [CustomerController::class, 'ping'])->name('customers.ping')->middleware('throttle:30,1');
     Route::put('/customers/{customer}/network', [CustomerController::class, 'updateNetworkInfo'])->name('customers.updateNetwork');
@@ -54,7 +54,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/maps/odp/{id}', [OdpController::class, 'show'])->whereNumber('id')->name('odp.show');
     Route::post('/maps/odp/{id}', [OdpController::class, 'update'])->whereNumber('id')->name('odp.update');
     Route::delete('/maps/odp/{id}', [OdpController::class, 'destroy'])->whereNumber('id')->name('odp.destroy');
-    Route::post('/maps/odp/{id}/photo', [OdpController::class, 'uploadPhoto'])->whereNumber('id')->name('odp.uploadPhoto');
+    Route::post('/maps/odp/{id}/photo', [OdpController::class, 'uploadPhoto'])->whereNumber('id')->name('odp.uploadPhoto')->middleware('throttle:15,1');
     Route::get('/maps/odp/{id}/ports', [OdpController::class, 'ports'])->whereNumber('id')->name('odp.ports');
     Route::get('/maps/odp/{id}/search-customers', [OdpController::class, 'searchAvailableCustomers'])->whereNumber('id')->name('odp.searchCustomers');
     Route::post('/maps/odp/{id}/assign-port', [OdpController::class, 'assignPort'])->whereNumber('id')->name('odp.assignPort');
@@ -73,7 +73,7 @@ Route::middleware('auth')->group(function () {
 
         // Database Backup Routes
         Route::get('/backups', [\App\Http\Controllers\BackupController::class, 'index'])->name('backups.index');
-        Route::post('/backups', [\App\Http\Controllers\BackupController::class, 'create'])->name('backups.create');
+        Route::post('/backups', [\App\Http\Controllers\BackupController::class, 'create'])->name('backups.create')->middleware('throttle:5,1');
         Route::get('/backups/{filename}/download', [\App\Http\Controllers\BackupController::class, 'download'])->name('backups.download');
         Route::delete('/backups/{filename}', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('backups.destroy');
         Route::post('/backups/clean', [\App\Http\Controllers\BackupController::class, 'clean'])->name('backups.clean');

@@ -41,11 +41,10 @@ class TelegramService
 
         try {
             $url = "https://api.telegram.org/bot{$this->botToken}/sendMessage";
+            $verifySsl = (bool) env('TELEGRAM_VERIFY_SSL', true);
 
-            $response = Http::withoutVerifying()
-                ->timeout(5)
-                ->asJson()
-                ->post($url, [
+            $client = $verifySsl ? Http::timeout(5) : Http::withoutVerifying()->timeout(5);
+            $response = $client->asJson()->post($url, [
                     'chat_id'                  => $chatId,
                     'text'                     => $text,
                     'parse_mode'               => 'HTML',

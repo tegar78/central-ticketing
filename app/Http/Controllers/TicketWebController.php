@@ -135,37 +135,26 @@ class TicketWebController extends Controller
         ]);
 
         // Webhook callback to CI Billing Instance (e.g. billingtest.gayuh.net.id.test)
-        $callbackUrl = $this->resolveCallbackUrl($ticket->billingInstance);
-        if ($callbackUrl) {
-            try {
-                $response = \Illuminate\Support\Facades\Http::withoutVerifying()
-                    ->timeout(5)
-                    ->post($callbackUrl, [
-                        'event'               => 'ticket_created',
-                        'ticket_number'       => $ticket->ticket_number,
-                        'remote_ticket_id'    => $ticket->remote_ticket_id ?? $ticket->ticket_number,
-                        'no_services'         => $ticket->no_services,
-                        'customer_name'       => $ticket->customer_name,
-                        'customer_phone'      => $ticket->customer_phone,
-                        'status'              => $ticket->status,
-                        'category_name'       => $ticket->category_name,
-                        'problem_description' => $ticket->problem_description,
-                        'created_by_name'     => $user->name,
-                        'created_by_role'     => $user->role,
-                        'updated_by_name'     => $user->name,
-                        'updated_by_role'     => $user->role,
-                    ]);
+        $response = $this->dispatchBillingWebhook($ticket->billingInstance, [
+            'event'               => 'ticket_created',
+            'ticket_number'       => $ticket->ticket_number,
+            'remote_ticket_id'    => $ticket->remote_ticket_id ?? $ticket->ticket_number,
+            'no_services'         => $ticket->no_services,
+            'customer_name'       => $ticket->customer_name,
+            'customer_phone'      => $ticket->customer_phone,
+            'status'              => $ticket->status,
+            'category_name'       => $ticket->category_name,
+            'problem_description' => $ticket->problem_description,
+            'created_by_name'     => $user->name,
+            'created_by_role'     => $user->role,
+            'updated_by_name'     => $user->name,
+            'updated_by_role'     => $user->role,
+        ]);
 
-                if ($response->successful()) {
-                    $resData = $response->json();
-                    if (!empty($resData['help_id'])) {
-                        $ticket->update(['remote_ticket_id' => $resData['help_id']]);
-                    }
-                } else {
-                    \Illuminate\Support\Facades\Log::warning("New ticket webhook callback failed for {$ticket->billingInstance->name} (HTTP {$response->status()}): " . $response->body());
-                }
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning("New ticket webhook callback failed for {$ticket->billingInstance->name}: " . $e->getMessage());
+        if ($response && $response->successful()) {
+            $resData = $response->json();
+            if (!empty($resData['help_id'])) {
+                $ticket->update(['remote_ticket_id' => $resData['help_id']]);
             }
         }
 
@@ -240,25 +229,16 @@ class TicketWebController extends Controller
         ]);
 
         // Webhook callback to CI Billing Instance
-        $callbackUrl = $this->resolveCallbackUrl($ticket->billingInstance);
-        if ($callbackUrl) {
-            try {
-                \Illuminate\Support\Facades\Http::withoutVerifying()
-                    ->timeout(5)
-                    ->post($callbackUrl, [
-                        'event'            => 'technician_assigned',
-                        'ticket_number'    => $ticket->ticket_number,
-                        'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
-                        'status'           => $ticket->status,
-                        'remark'           => $remark,
-                        'technician_name'  => $technician->name,
-                        'updated_by_name'  => $user->name,
-                        'updated_by_role'  => $user->role,
-                    ]);
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning("Assign technician callback failed: " . $e->getMessage());
-            }
-        }
+        $this->dispatchBillingWebhook($ticket->billingInstance, [
+            'event'            => 'technician_assigned',
+            'ticket_number'    => $ticket->ticket_number,
+            'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
+            'status'           => $ticket->status,
+            'remark'           => $remark,
+            'technician_name'  => $technician->name,
+            'updated_by_name'  => $user->name,
+            'updated_by_role'  => $user->role,
+        ]);
 
         // Kirim Notifikasi ke Grup Telegram
         $this->telegramService->sendTicketNotification($ticket, 'technician_assigned', $remark, $user);
@@ -308,25 +288,16 @@ class TicketWebController extends Controller
         ]);
 
         // Webhook callback to CI Billing Instance
-        $callbackUrl = $this->resolveCallbackUrl($ticket->billingInstance);
-        if ($callbackUrl) {
-            try {
-                \Illuminate\Support\Facades\Http::withoutVerifying()
-                    ->timeout(5)
-                    ->post($callbackUrl, [
-                        'event'            => 'status_updated',
-                        'ticket_number'    => $ticket->ticket_number,
-                        'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
-                        'status'           => $validated['status'],
-                        'remark'           => $validated['remark'],
-                        'technician_name'  => $user->name,
-                        'updated_by_name'  => $user->name,
-                        'updated_by_role'  => $user->role,
-                    ]);
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning("Callback failed: " . $e->getMessage());
-            }
-        }
+        $this->dispatchBillingWebhook($ticket->billingInstance, [
+            'event'            => 'status_updated',
+            'ticket_number'    => $ticket->ticket_number,
+            'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
+            'status'           => $validated['status'],
+            'remark'           => $validated['remark'],
+            'technician_name'  => $user->name,
+            'updated_by_name'  => $user->name,
+            'updated_by_role'  => $user->role,
+        ]);
 
         // Kirim Notifikasi ke Grup Telegram
         $this->telegramService->sendTicketNotification($ticket, 'status_updated', $validated['remark'], $user);
@@ -378,5 +349,45 @@ class TicketWebController extends Controller
         }
 
         return $url;
+    }
+
+    /**
+     * Dispatch cryptographically signed webhook callback to a billing instance
+     */
+    protected function dispatchBillingWebhook(?BillingInstance $instance, array $payload): ?\Illuminate\Http\Client\Response
+    {
+        $callbackUrl = $this->resolveCallbackUrl($instance);
+        if (!$instance || !$callbackUrl) {
+            return null;
+        }
+
+        try {
+            $timestamp = time();
+            $payloadJson = json_encode($payload);
+            $signature = hash_hmac('sha256', "{$timestamp}.{$payloadJson}", $instance->api_key ?? '');
+
+            $verifySsl = (bool) env('BILLING_VERIFY_SSL', false);
+            $client = $verifySsl
+                ? \Illuminate\Support\Facades\Http::timeout(5)
+                : \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(5);
+
+            $response = $client->withHeaders([
+                'X-Central-Signature' => $signature,
+                'X-Central-Timestamp' => (string) $timestamp,
+                'X-API-KEY'           => $instance->api_key,
+                'Content-Type'        => 'application/json',
+                'Accept'              => 'application/json',
+            ])->post($callbackUrl, $payload);
+
+            if (!$response->successful()) {
+                $sanitizedBody = substr(strip_tags($response->body()), 0, 200);
+                \Illuminate\Support\Facades\Log::warning("Billing webhook failed for {$instance->name} (HTTP {$response->status()}): {$sanitizedBody}");
+            }
+
+            return $response;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Billing webhook exception for {$instance->name}: " . $e->getMessage());
+            return null;
+        }
     }
 }

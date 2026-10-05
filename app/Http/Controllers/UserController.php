@@ -66,7 +66,7 @@ class UserController extends Controller implements HasMiddleware
             'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:20',
             'role' => 'required|in:admin,operator,technician',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:8',
         ]);
 
         User::create([
@@ -91,7 +91,7 @@ class UserController extends Controller implements HasMiddleware
             'phone' => 'nullable|string|max:20',
             'role' => 'required|in:admin,operator,technician',
             'is_active' => 'required|boolean',
-            'password' => 'nullable|string|min:6',
+            'password' => 'nullable|string|min:8',
         ]);
 
         // Prevent logged-in administrator from locking themselves out
