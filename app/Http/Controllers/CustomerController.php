@@ -92,7 +92,7 @@ class CustomerController extends Controller
     public function liveSearch(Request $request)
     {
         $q = trim($request->get('q', ''));
-        $billingId = $request->get('billing_id');
+        $billingId = $request->get('billing_id') ?: $request->get('billing_instance_id') ?: $request->get('billing_node_id');
 
         if (empty($q) && empty($billingId)) {
             return response()->json([
@@ -101,7 +101,7 @@ class CustomerController extends Controller
             ]);
         }
 
-        $query = Customer::query();
+        $query = Customer::with('billingNode:id,name,tenant_code');
 
         if (!empty($billingId) && $billingId !== 'all') {
             $query->where('billing_node_id', $billingId);
@@ -116,6 +116,8 @@ class CustomerController extends Controller
             });
         }
 
+        $totalCount = (clone $query)->count();
+
         $customers = $query->limit(20)->get()->map(function ($cust) {
             return [
                 'no_services'         => $cust->no_services,
@@ -123,6 +125,8 @@ class CustomerController extends Controller
                 'customer_phone'      => $cust->phone ?? '-',
                 'customer_address'    => trim($cust->address ?? ''),
                 'billing_instance_id' => $cust->billing_node_id,
+                'billing_tenant'      => $cust->billingNode->tenant_code ?? null,
+                'billing_name'        => $cust->billingNode->name ?? null,
                 'status'              => ucfirst($cust->status ?? 'Active'),
                 'package_name'        => $cust->package_name ?? 'Regular',
                 'odp_name'            => $cust->odp_name ?? '-',
@@ -132,7 +136,7 @@ class CustomerController extends Controller
         });
 
         return response()->json([
-            'total' => $customers->count(),
+            'total' => $totalCount,
             'customers' => $customers
         ]);
     }

@@ -418,9 +418,11 @@
                 <label class="block text-xs font-bold uppercase text-slate-600 dark:text-slate-400 mb-1">Aplikasi Billing Gayuh <span class="text-rose-500">*</span></label>
                 <select name="billing_instance_id" required onchange="fetchCustomersFromSelectedBilling(this.value)"
                     class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
-                    <option value="">-- Pilih Billing Instance --</option>
+                    <option value="" data-count="{{ (int) ($totalCustomersCount ?? 0) }}">-- Pilih Billing Instance --</option>
                     @foreach($tenants as $t)
-                    <option value="{{ $t->id }}" {{ old('billing_instance_id') == $t->id ? 'selected' : '' }}>{{ $t->tenant_code }} - {{ $t->name }}</option>
+                    <option value="{{ $t->id }}" data-count="{{ (int) ($t->customers_count ?? 0) }}" {{ old('billing_instance_id') == $t->id ? 'selected' : '' }}>
+                        {{ $t->tenant_code }} - {{ $t->name }} ({{ number_format($t->customers_count ?? 0) }} Pelanggan)
+                    </option>
                     @endforeach
                 </select>
             </div>
@@ -515,10 +517,14 @@
         return safeText.replace(regex, '<mark class="bg-amber-200 dark:bg-amber-900/60 text-amber-950 dark:text-amber-200 font-semibold px-0.5 rounded">$1</mark>');
     }
 
+    let activeSelectedCustomer = null;
+
     function handleCustomerLiveSearch(query) {
         const clearBtn = document.getElementById('clearCustomerSearchBtn');
         const resultsBox = document.getElementById('customerLiveSearchResults');
         const badge = document.getElementById('customerCountBadge');
+        const billingSelect = document.querySelector('#createTicketModal select[name="billing_instance_id"]');
+        const selectedOpt = billingSelect ? billingSelect.selectedOptions[0] : null;
 
         if (clearBtn) {
             if (query && query.trim() !== '') {
@@ -533,7 +539,13 @@
         const q = (query || '').trim();
         if (q === '') {
             if (resultsBox) resultsBox.classList.add('hidden');
-            if (badge) badge.textContent = '{{ number_format($totalCustomersCount ?? 0) }} Pelanggan';
+            if (badge) {
+                if (selectedOpt && selectedOpt.dataset.count) {
+                    badge.textContent = `${parseInt(selectedOpt.dataset.count, 10).toLocaleString()} Pelanggan`;
+                } else {
+                    badge.textContent = '{{ number_format($totalCustomersCount ?? 0) }} Pelanggan';
+                }
+            }
             currentSearchResults = [];
             activeHighlightedIndex = -1;
             return;
@@ -549,6 +561,9 @@
         const badge = document.getElementById('customerCountBadge');
         if (!resultsBox) return;
 
+        const billingSelect = document.querySelector('#createTicketModal select[name="billing_instance_id"]');
+        const billingId = billingSelect ? billingSelect.value : '';
+
         if (liveSearchAbortController) {
             liveSearchAbortController.abort();
         }
@@ -561,7 +576,12 @@
         `;
         resultsBox.classList.remove('hidden');
 
-        fetch(`{{ route('customers.liveSearch') }}?q=${encodeURIComponent(query)}`, {
+        let url = `{{ route('customers.liveSearch') }}?q=${encodeURIComponent(query || '')}`;
+        if (billingId && billingId !== 'all') {
+            url += `&billing_id=${encodeURIComponent(billingId)}`;
+        }
+
+        fetch(url, {
             signal: liveSearchAbortController.signal,
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
@@ -574,14 +594,23 @@
             activeHighlightedIndex = -1;
 
             if (badge) {
-                badge.textContent = `${data.total} Ditemukan`;
+                if (query && query.trim() !== '') {
+                    badge.textContent = `${data.total} Ditemukan`;
+                } else if (billingId && billingId !== 'all') {
+                    badge.textContent = `${data.total} Pelanggan`;
+                } else {
+                    badge.textContent = `${data.total || '{{ number_format($totalCustomersCount ?? 0) }}'} Pelanggan`;
+                }
             }
 
             if (currentSearchResults.length === 0) {
+                const billingText = billingSelect && billingSelect.selectedOptions.length > 0 && billingSelect.value
+                    ? ` di billing [${billingSelect.selectedOptions[0].text.trim()}]`
+                    : '';
                 resultsBox.innerHTML = `
                     <div class="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
                         <i class="fa-solid fa-user-slash text-slate-300 dark:text-slate-600 text-lg mb-1 block"></i>
-                        Tidak ditemukan pelanggan dengan kata kunci "<strong>${escapeHtml(query)}</strong>"
+                        Tidak ditemukan pelanggan${query ? ` dengan kata kunci "<strong>${escapeHtml(query)}</strong>"` : ''}${billingText}
                     </div>
                 `;
                 resultsBox.classList.remove('hidden');
@@ -591,9 +620,9 @@
             const visibleItems = currentSearchResults.slice(0, 20);
             let html = '';
             visibleItems.forEach((cust, index) => {
-                const nameHtml = highlightKeyword(cust.customer_name || 'Tanpa Nama', query);
-                const idHtml = highlightKeyword(cust.no_services || '', query);
-                const phoneHtml = highlightKeyword(cust.customer_phone || '-', query);
+                const nameHtml = highlightKeyword(cust.customer_name || 'Tanpa Nama', query || '');
+                const idHtml = highlightKeyword(cust.no_services || '', query || '');
+                const phoneHtml = highlightKeyword(cust.customer_phone || '-', query || '');
                 const statusClass = (cust.status || '').toLowerCase() === 'active' || (cust.status || '').toLowerCase() === 'aktif'
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40'
                     : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40';
@@ -610,6 +639,7 @@
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <span class="font-bold text-slate-800 dark:text-slate-100 text-xs">${nameHtml}</span>
                                     <span class="font-mono text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-semibold border border-slate-200 dark:border-slate-600">${idHtml}</span>
+                                    ${cust.billing_tenant ? `<span class="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 font-mono bg-emerald-100 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/40">[${escapeHtml(cust.billing_tenant)}]</span>` : ''}
                                 </div>
                                 <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
                                     <span><i class="fa-solid fa-phone text-[9px] mr-1"></i>${phoneHtml}</span>
@@ -651,8 +681,12 @@
 
     function handleCustomerSearchFocus() {
         const input = document.getElementById('customerSearchBox');
-        if (input && input.value.trim() !== '') {
-            performCustomerSearch(input.value.trim());
+        const billingSelect = document.querySelector('#createTicketModal select[name="billing_instance_id"]');
+        const billingId = billingSelect ? billingSelect.value : '';
+
+        // If there is query or a billing instance is selected, perform search immediately
+        if ((input && input.value.trim() !== '') || (billingId && billingId !== 'all')) {
+            performCustomerSearch(input ? input.value.trim() : '');
         }
     }
 
@@ -718,6 +752,7 @@
         const selectBilling = document.querySelector('#createTicketModal select[name="billing_instance_id"]');
         if (selectBilling && cust.billing_instance_id) {
             selectBilling.value = cust.billing_instance_id;
+            fetchCustomersFromSelectedBilling(cust.billing_instance_id, false);
         }
 
         const inputLat = document.getElementById('customerLatitude');
@@ -757,14 +792,15 @@
         if (resultsBox) resultsBox.classList.add('hidden');
     }
 
-    function resetCustomerSelection() {
+    function resetCustomerSelection(focusSearch = true) {
+        activeSelectedCustomer = null;
         const banner = document.getElementById('selectedCustomerBanner');
         if (banner) banner.classList.add('hidden');
 
         const searchBox = document.getElementById('customerSearchBox');
         if (searchBox) {
             searchBox.value = '';
-            searchBox.focus();
+            if (focusSearch) searchBox.focus();
         }
 
         const clearBtn = document.getElementById('clearCustomerSearchBtn');
@@ -773,8 +809,16 @@
         const resultsBox = document.getElementById('customerLiveSearchResults');
         if (resultsBox) resultsBox.classList.add('hidden');
 
+        const billingSelect = document.querySelector('#createTicketModal select[name="billing_instance_id"]');
+        const selectedOpt = billingSelect ? billingSelect.selectedOptions[0] : null;
         const badge = document.getElementById('customerCountBadge');
-        if (badge) badge.textContent = allRawCustomers.length + ' Pelanggan';
+        if (badge) {
+            if (selectedOpt && selectedOpt.dataset.count) {
+                badge.textContent = `${parseInt(selectedOpt.dataset.count, 10).toLocaleString()} Pelanggan`;
+            } else {
+                badge.textContent = '{{ number_format($totalCustomersCount ?? 0) }} Pelanggan';
+            }
+        }
 
         const inputNoServ = document.querySelector('#createTicketModal input[name="no_services"]');
         if (inputNoServ) inputNoServ.value = '';
@@ -807,30 +851,35 @@
         }
     });
 
-    function fetchCustomersFromSelectedBilling(billingId) {
-        if (!billingId) billingId = 'all';
-
-        const searchBox = document.getElementById('customerSearchBox');
+    function fetchCustomersFromSelectedBilling(billingId, triggerSearch = true) {
+        const billingSelect = document.querySelector('#createTicketModal select[name="billing_instance_id"]');
         const badge = document.getElementById('customerCountBadge');
+        const searchBox = document.getElementById('customerSearchBox');
+        const selectedOpt = billingSelect ? billingSelect.selectedOptions[0] : null;
 
-        if (badge) badge.textContent = 'Memuat data...';
+        // 1. Immediately update customer count badge from option data-count attribute
+        if (badge) {
+            if (selectedOpt && selectedOpt.dataset.count) {
+                const countNum = parseInt(selectedOpt.dataset.count, 10);
+                badge.textContent = `${countNum.toLocaleString()} Pelanggan`;
+            } else if (!billingId || billingId === 'all') {
+                badge.textContent = '{{ number_format($totalCustomersCount ?? 0) }} Pelanggan';
+            }
+        }
 
-        fetch('/billing-instances/' + billingId + '/customers')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && Array.isArray(data.customers)) {
-                    allRawCustomers = data.customers;
-                    if (badge) badge.textContent = allRawCustomers.length + ' Pelanggan';
-                    const q = searchBox ? searchBox.value.trim() : '';
-                    if (q !== '') {
-                        performCustomerSearch(q);
-                    }
-                }
-            })
-            .catch(err => {
-                console.error('Error fetching billing customers:', err);
-                if (badge) badge.textContent = allRawCustomers.length + ' Pelanggan';
-            });
+        // 2. If a customer was previously selected from another billing, reset selection
+        if (activeSelectedCustomer && billingId && activeSelectedCustomer.billing_instance_id != billingId) {
+            resetCustomerSelection(false);
+        }
+
+        if (!triggerSearch) return;
+
+        // 3. Re-perform search with the newly selected billing node filter
+        const q = searchBox ? searchBox.value.trim() : '';
+        const resultsBox = document.getElementById('customerLiveSearchResults');
+        if (q !== '' || (resultsBox && !resultsBox.classList.contains('hidden'))) {
+            performCustomerSearch(q);
+        }
     }
 </script>
 

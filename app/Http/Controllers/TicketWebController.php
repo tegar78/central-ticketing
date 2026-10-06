@@ -67,7 +67,7 @@ class TicketWebController extends Controller
         $closeCount = (clone $baseCountQuery)->where('status', 'close')->count();
         $totalCount = (clone $baseCountQuery)->count();
 
-        $tenants = BillingInstance::where('is_active', true)->get();
+        $tenants = BillingInstance::where('is_active', true)->withCount('customers')->get();
         $technicians = User::where('role', 'technician')->where('is_active', true)->get();
         $totalCustomersCount = Customer::count();
 

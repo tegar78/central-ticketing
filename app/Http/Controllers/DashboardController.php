@@ -96,7 +96,7 @@ class DashboardController extends Controller
             $trendClosed[] = $closedVal;
         }
 
-        $tenants = BillingInstance::where('is_active', true)->get();
+        $tenants = BillingInstance::where('is_active', true)->withCount('customers')->get();
         $technicians = User::where('role', 'technician')->where('is_active', true)->get();
         $totalCustomersCount = \App\Models\Customer::count();
 
