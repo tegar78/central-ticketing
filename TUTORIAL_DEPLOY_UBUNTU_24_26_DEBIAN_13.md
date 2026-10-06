@@ -384,6 +384,8 @@ php artisan odp:sync
 ```
 
 > **Hasil:** Database MariaDB kamu sekarang sudah memiliki tabel-tabel lengkap (`tickets`, `customers`, `odps`, `billing_instances`, dsb.) dan master ODP canonical tanpa duplikasi!
+>
+> 📖 **Panduan Mendalam:** Untuk memahami cara kerja rollback, backup otomatis, dan penanganan error migrasi, baca file [TUTORIAL_MIGRASI_DATABASE.md](file:///f:/PROJECT-TEGAR/central-ticketing/TUTORIAL_MIGRASI_DATABASE.md).
 
 ---
 
