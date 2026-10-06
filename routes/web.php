@@ -51,6 +51,7 @@ Route::middleware('auth')->group(function () {
     // Maps & Management ODP (Optical Distribution Point)
     Route::get('/maps/odp', [OdpController::class, 'index'])->name('odp.index');
     Route::post('/maps/odp', [OdpController::class, 'store'])->name('odp.store');
+    Route::post('/maps/odp/sync', [OdpController::class, 'syncBillingOdps'])->name('odp.sync')->middleware('throttle:10,1');
     Route::get('/maps/odp/{id}', [OdpController::class, 'show'])->whereNumber('id')->name('odp.show');
     Route::post('/maps/odp/{id}', [OdpController::class, 'update'])->whereNumber('id')->name('odp.update');
     Route::delete('/maps/odp/{id}', [OdpController::class, 'destroy'])->whereNumber('id')->name('odp.destroy');

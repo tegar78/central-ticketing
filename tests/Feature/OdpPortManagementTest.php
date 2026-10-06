@@ -45,7 +45,6 @@ class OdpPortManagementTest extends TestCase
 
         $this->odp = Odp::create([
             'code_odp' => 'ODP-TEST-01',
-            'billing_node_id' => $this->billing->id,
             'cluster_name' => 'Cluster Test',
             'latitude' => -6.2,
             'longitude' => 106.8,
@@ -174,8 +173,9 @@ class OdpPortManagementTest extends TestCase
             'status' => 'active',
         ]);
 
+        // Scoped search with billing_node_id
         $response = $this->actingAs($this->admin)
-            ->getJson("/maps/odp/{$this->odp->id}/search-customers?q=Siti");
+            ->getJson("/maps/odp/{$this->odp->id}/search-customers?q=Siti&billing_node_id={$this->billing->id}");
 
         $response->assertStatus(200)
             ->assertJson(['success' => true]);
@@ -183,6 +183,14 @@ class OdpPortManagementTest extends TestCase
         $customers = $response->json('customers');
         $this->assertCount(1, $customers);
         $this->assertEquals('Siti Soleha', $customers[0]['name']);
+
+        // Unscoped search across all billings
+        $globalResponse = $this->actingAs($this->admin)
+            ->getJson("/maps/odp/{$this->odp->id}/search-customers?q=Siti");
+
+        $globalResponse->assertStatus(200)
+            ->assertJson(['success' => true]);
+        $this->assertCount(2, $globalResponse->json('customers'));
     }
 
     public function test_admin_can_assign_customer_to_port(): void
@@ -246,4 +254,143 @@ class OdpPortManagementTest extends TestCase
         $this->odp->refresh();
         $this->assertEquals(0, $this->odp->used_ports);
     }
+
+    public function test_odp_code_is_globally_unique_in_database(): void
+    {
+        $this->expectException(\Illuminate\Database\QueryException::class);
+
+        // Attempting to create duplicate physical ODP with the same code must fail
+        Odp::create([
+            'code_odp' => 'ODP-TEST-01',
+            'latitude' => -6.2,
+            'longitude' => 106.8,
+            'total_ports' => 8,
+            'used_ports' => 0,
+            'status' => 'active',
+        ]);
+    }
+
+    public function test_odp_index_serves_single_canonical_physical_box_with_multi_tenant_customers(): void
+    {
+        $billing2 = BillingInstance::create([
+            'tenant_code' => 'BILL-TEST-NODE-2',
+            'name' => 'Billing Node Test 2',
+            'api_key' => 'secret-key-456',
+            'is_active' => true,
+        ]);
+
+        // Client 1 from Node 1 on Port 1
+        Customer::create([
+            'billing_node_id' => $this->billing->id,
+            'remote_customer_id' => 'REMOTE-A1',
+            'name' => 'Client A',
+            'no_services' => '1001',
+            'odp_name' => 'ODP-TEST-01',
+            'port_number' => 1,
+            'status' => 'active',
+        ]);
+
+        // Client 2 from Node 2 on Port 5
+        Customer::create([
+            'billing_node_id' => $billing2->id,
+            'remote_customer_id' => 'REMOTE-B1',
+            'name' => 'Client B',
+            'no_services' => '2001',
+            'odp_name' => 'ODP-TEST-01',
+            'port_number' => 5,
+            'status' => 'active',
+        ]);
+
+        $this->odp->update(['used_ports' => 2]);
+
+        $response = $this->actingAs($this->admin)
+            ->get('/maps/odp');
+
+        $response->assertStatus(200);
+
+        // Verify only 1 physical ODP row is returned in odpList and totalOdps is 1
+        $odpList = $response->viewData('odpList');
+        $totalOdps = $response->viewData('totalOdps');
+        $totalUsedPorts = $response->viewData('totalUsedPorts');
+
+        $this->assertEquals(1, $totalOdps);
+        $this->assertCount(1, $odpList);
+
+        $row = $odpList->first();
+        $this->assertEquals('ODP-TEST-01', $row->code_odp);
+        $this->assertEquals(2, $row->used_ports);
+        $this->assertEquals(2, $totalUsedPorts);
+    }
+
+    public function test_port_matrix_displays_clients_from_their_respective_billing_nodes(): void
+    {
+        $billing2 = BillingInstance::create([
+            'tenant_code' => 'BILL-NEW-TENANT',
+            'name' => 'Tenant Baru',
+            'api_key' => 'secret-789',
+            'is_active' => true,
+        ]);
+
+        // Client 1 from Node 1 on Port 2
+        Customer::create([
+            'billing_node_id' => $this->billing->id,
+            'remote_customer_id' => 'CUST-N1',
+            'name' => 'Customer Node Satu',
+            'no_services' => '1111',
+            'odp_name' => 'ODP-TEST-01',
+            'port_number' => 2,
+            'status' => 'active',
+        ]);
+
+        // Client 2 from Node 2 on Port 6
+        Customer::create([
+            'billing_node_id' => $billing2->id,
+            'remote_customer_id' => 'CUST-N2',
+            'name' => 'Customer Node Dua',
+            'no_services' => '2222',
+            'odp_name' => 'ODP-TEST-01',
+            'port_number' => 6,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->getJson("/maps/odp/{$this->odp->id}/ports");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'odp' => [
+                    'code_odp' => 'ODP-TEST-01',
+                    'used_ports' => 2,
+                ],
+            ]);
+
+        $ports = $response->json('ports');
+        $this->assertCount(8, $ports);
+
+        // Port 1 is available
+        $this->assertEquals('available', $ports[0]['status']);
+        $this->assertNull($ports[0]['customer']);
+
+        // Port 2 has Customer Node Satu from BILL-TEST-NODE
+        $this->assertEquals('occupied', $ports[1]['status']);
+        $this->assertEquals('Customer Node Satu', $ports[1]['customer']['name']);
+        $this->assertEquals('BILL-TEST-NODE', $ports[1]['customer']['billing_node']['tenant_code']);
+
+        // Port 6 has Customer Node Dua from BILL-NEW-TENANT
+        $this->assertEquals('occupied', $ports[5]['status']);
+        $this->assertEquals('Customer Node Dua', $ports[5]['customer']['name']);
+        $this->assertEquals('BILL-NEW-TENANT', $ports[5]['customer']['billing_node']['tenant_code']);
+    }
+
+    public function test_odp_index_page_1_renders_successfully(): void
+    {
+        $response = $this->actingAs($this->admin)
+            ->get('/maps/odp?page=1');
+
+        $response->assertStatus(200);
+        $response->assertSee('ODP-TEST-01');
+    }
 }
+
+

@@ -56,8 +56,8 @@ class SyncBillingCustomersCommand extends Command
             // Always enrich port numbers and ODP associations if direct DB is accessible
             $this->enrichPortsFromDirectDatabase($tenant);
 
-            // Sync master ODPs if /central/odps exists on CI3
-            $this->syncOdpsViaRestApi($tenant);
+            // Sync master ODPs directly from DB or REST API via OdpSyncService
+            app(\App\Services\OdpSyncService::class)->syncTenant($tenant);
 
             // Auto-discover any missing ODPs referenced by customers
             $this->autoDiscoverMissingOdps($tenant);
@@ -446,7 +446,6 @@ class SyncBillingCustomersCommand extends Command
                         $q->where('odp_name', $odp->code_odp)
                           ->orWhere('odp_name', $cleanCode);
                     })
-                    ->when($odp->billing_node_id, fn($q) => $q->where('billing_node_id', $odp->billing_node_id))
                     ->count();
 
                 $status = ($usedCount >= $odp->total_ports && $odp->status === 'active') ? 'full' : $odp->status;
@@ -491,15 +490,50 @@ class SyncBillingCustomersCommand extends Command
                 if (!empty($items) && is_array($items)) {
                     $count = 0;
                     foreach ($items as $odpItem) {
-                        $rawCode = trim((string)($odpItem['code_odp'] ?? $odpItem['name'] ?? ''));
+                        $rawCode = trim((string)($odpItem['code_odp'] ?? $odpItem['code'] ?? $odpItem['name'] ?? ''));
                         if (empty($rawCode)) continue;
 
                         $clean = strtoupper(trim(preg_replace('/^ODP-/i', '', $rawCode)));
+                        $clean = strtoupper(trim(preg_replace('/-C[0-9]+$/i', '', $clean)));
                         $normalizedCode = 'ODP-' . $clean;
 
                         $totalPorts = !empty($odpItem['total_ports']) 
                             ? (int)$odpItem['total_ports'] 
                             : (!empty($odpItem['total_port']) ? (int)$odpItem['total_port'] : 16);
+
+                        $lat = !empty($odpItem['latitude']) ? (string)$odpItem['latitude'] : null;
+                        $lng = !empty($odpItem['longitude']) ? (string)$odpItem['longitude'] : null;
+
+                        // Fallback to surveyed master ODP coordinates in Central if remote is empty
+                        if (empty($lat) || empty($lng)) {
+                            $masterOdp = Odp::where('code_odp', $normalizedCode)
+                                ->whereNotNull('latitude')
+                                ->where('latitude', '!=', '')
+                                ->where('latitude', '!=', '0')
+                                ->first();
+                            if ($masterOdp) {
+                                $lat = $masterOdp->latitude;
+                                $lng = $masterOdp->longitude;
+                            }
+                        }
+
+                        // Fallback to sample customer coordinates if still empty
+                        if (empty($lat) || empty($lng)) {
+                            $sampleCust = Customer::where('billing_node_id', $tenant->id)
+                                ->where(function ($q) use ($normalizedCode, $clean, $rawCode) {
+                                    $q->where('odp_name', $normalizedCode)
+                                      ->orWhere('odp_name', $clean)
+                                      ->orWhere('odp_name', $rawCode);
+                                })
+                                ->whereNotNull('latitude')
+                                ->where('latitude', '!=', '')
+                                ->where('latitude', '!=', '0')
+                                ->first();
+                            if ($sampleCust) {
+                                $lat = $sampleCust->latitude;
+                                $lng = $sampleCust->longitude;
+                            }
+                        }
 
                         Odp::updateOrCreate(
                             [
@@ -508,8 +542,8 @@ class SyncBillingCustomersCommand extends Command
                             ],
                             [
                                 'name'        => $odpItem['name'] ?? ('ODP ' . $clean),
-                                'latitude'    => !empty($odpItem['latitude']) ? (string)$odpItem['latitude'] : null,
-                                'longitude'   => !empty($odpItem['longitude']) ? (string)$odpItem['longitude'] : null,
+                                'latitude'    => $lat,
+                                'longitude'   => $lng,
                                 'total_ports' => $totalPorts,
                                 'notes'       => $odpItem['notes'] ?? $odpItem['remark'] ?? null,
                                 'created_by'  => 1,
@@ -566,6 +600,16 @@ class SyncBillingCustomersCommand extends Command
                     ->where('latitude', '!=', '0')
                     ->first();
 
+                // If customer has no coordinates, check if another surveyed ODP exists
+                $masterOdp = null;
+                if (!$sampleCust || empty($sampleCust->latitude)) {
+                    $masterOdp = Odp::where('code_odp', $code)
+                        ->whereNotNull('latitude')
+                        ->where('latitude', '!=', '')
+                        ->where('latitude', '!=', '0')
+                        ->first();
+                }
+
                 $maxPort = Customer::where('billing_node_id', $tenant->id)
                     ->where(function ($q) use ($code, $clean, $rawName) {
                         $q->where('odp_name', $code)
@@ -577,11 +621,10 @@ class SyncBillingCustomersCommand extends Command
                 $totalPorts = max(16, (int)$maxPort);
 
                 $newOdp = Odp::create([
-                    'billing_node_id' => $tenant->id,
                     'code_odp'        => $code,
                     'name'            => 'ODP ' . $clean,
-                    'latitude'        => $sampleCust?->latitude,
-                    'longitude'       => $sampleCust?->longitude,
+                    'latitude'        => $sampleCust?->latitude ?? $masterOdp?->latitude,
+                    'longitude'       => $sampleCust?->longitude ?? $masterOdp?->longitude,
                     'total_ports'     => $totalPorts,
                     'used_ports'      => 0,
                     'status'          => 'active',
@@ -602,6 +645,7 @@ class SyncBillingCustomersCommand extends Command
             $this->info("  ✓ Auto-discover: Menemukan dan mendaftarkan {$createdCount} ODP baru dari data pelanggan.");
         }
     }
+
 
     /**
      * Map CI3 c_status values to Central Ticket System status

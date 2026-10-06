@@ -16,7 +16,6 @@ class Odp extends Model
     protected $table = 'odps';
 
     protected $fillable = [
-        'billing_node_id',
         'code_odp',
         'name',
         'latitude',
@@ -31,7 +30,6 @@ class Odp extends Model
     ];
 
     protected $casts = [
-        'billing_node_id' => 'integer',
         'created_by'      => 'integer',
         'total_ports'     => 'integer',
         'used_ports'      => 'integer',
@@ -44,16 +42,16 @@ class Odp extends Model
     ];
 
     /**
-     * Billing Node / Instance relationship
+     * Backward-compatible accessors; master ODP is unified across all billing nodes
      */
-    public function billingNode(): BelongsTo
+    public function getBillingNodeAttribute(): ?BillingInstance
     {
-        return $this->belongsTo(BillingInstance::class, 'billing_node_id');
+        return $this->connected_nodes->first();
     }
 
-    public function billingInstance(): BelongsTo
+    public function getBillingInstanceAttribute(): ?BillingInstance
     {
-        return $this->belongsTo(BillingInstance::class, 'billing_node_id');
+        return $this->billing_node;
     }
 
     /**
@@ -73,6 +71,19 @@ class Odp extends Model
     }
 
     /**
+     * Get all connected billing instances whose clients occupy ports on this physical ODP
+     */
+    public function getConnectedNodesAttribute()
+    {
+        return BillingInstance::whereIn('id', function ($q) {
+            $q->select('billing_node_id')
+              ->from('customers')
+              ->where('odp_name', $this->code_odp)
+              ->whereNotNull('billing_node_id');
+        })->get(['id', 'tenant_code', 'name']);
+    }
+
+    /**
      * Get customers strictly scoped to this ODP's billing node to avoid cross-tenant leakage
      */
     public function getScopedCustomersAttribute()
@@ -86,9 +97,9 @@ class Odp extends Model
     }
 
     /**
-     * Get complete port slot matrix from 1 to total_ports with connected customers
+     * Get complete port slot matrix from 1 to total_ports with connected customers across billing nodes
      */
-    public function getPortMatrix(): array
+    public function getPortMatrix(?int $billingNodeId = null): array
     {
         $cleanCode = preg_replace('/^ODP-/i', '', $this->code_odp);
         $customers = Customer::with('billingNode:id,name,tenant_code')
@@ -96,22 +107,26 @@ class Odp extends Model
                 $q->where('odp_name', $this->code_odp)
                   ->orWhere('odp_name', $cleanCode);
             })
-            ->when($this->billing_node_id, function ($q) {
-                $q->where('billing_node_id', $this->billing_node_id);
+            ->when($billingNodeId, function ($q) use ($billingNodeId) {
+                $q->where('billing_node_id', $billingNodeId);
             })
             ->get();
 
-        $byPort = $customers->whereNotNull('port_number')->keyBy('port_number');
+        $byPort = $customers->whereNotNull('port_number')->groupBy('port_number');
         $unassigned = $customers->whereNull('port_number')->values();
 
         $ports = [];
         $total = max(1, (int) $this->total_ports);
 
         for ($i = 1; $i <= $total; $i++) {
-            $cust = $byPort->get($i);
+            $portCustomers = $byPort->get($i, collect());
+            $cust = $portCustomers->first();
+            $isConflict = $portCustomers->count() > 1;
+
             $ports[] = [
                 'port_number' => $i,
                 'status'      => $cust ? 'occupied' : 'available',
+                'is_conflict' => $isConflict,
                 'customer'    => $cust ? [
                     'id'           => $cust->id,
                     'no_services'  => $cust->no_services,
@@ -126,12 +141,26 @@ class Odp extends Model
                         'name'        => $cust->billingNode->name,
                     ] : null,
                 ] : null,
+                'all_customers' => $portCustomers->map(fn($c) => [
+                    'id'           => $c->id,
+                    'no_services'  => $c->no_services,
+                    'name'         => $c->name,
+                    'phone'        => $c->phone,
+                    'address'      => $c->address,
+                    'status'       => $c->status,
+                    'package_name' => $c->package_name,
+                    'billing_node' => $c->billingNode ? [
+                        'id'          => $c->billingNode->id,
+                        'tenant_code' => $c->billingNode->tenant_code,
+                        'name'        => $c->billingNode->name,
+                    ] : null,
+                ])->values(),
             ];
         }
 
         return [
             'total_ports'      => $total,
-            'used_ports_count' => $customers->count(),
+            'used_ports_count' => $byPort->count() ?: $customers->count(),
             'ports'            => $ports,
             'unassigned'       => $unassigned->map(fn($c) => [
                 'id'           => $c->id,
@@ -149,6 +178,7 @@ class Odp extends Model
             ]),
         ];
     }
+
 
     /**
      * Accessor for full public photo URL
@@ -226,6 +256,23 @@ class Odp extends Model
               ->orWhere('name', 'like', "%{$term}%")
               ->orWhere('address', 'like', "%{$term}%")
               ->orWhere('notes', 'like', "%{$term}%");
+        });
+    }
+
+    /**
+     * Scope query to ODPs associated with a specific billing node (via connected customers)
+     */
+    public function scopeForBillingNode(Builder $query, ?int $billingNodeId): Builder
+    {
+        if (empty($billingNodeId)) {
+            return $query;
+        }
+
+        return $query->whereIn('code_odp', function ($q) use ($billingNodeId) {
+            $q->select('odp_name')
+              ->from('customers')
+              ->where('billing_node_id', $billingNodeId)
+              ->whereNotNull('odp_name');
         });
     }
 }

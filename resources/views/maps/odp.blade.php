@@ -141,6 +141,11 @@
             </button>
 
             @if(in_array($user->role, ['admin', 'operator']))
+            <!-- Sync ODP dari Billing Trigger -->
+            <button type="button" onclick="triggerOdpSync()" id="btnSyncBillingOdp" class="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-sky-600/20 flex items-center gap-1.5 transition-all" title="Sinkronkan seluruh master data ODP langsung dari database billing tanpa data pelanggan">
+                <i class="fa-solid fa-arrows-rotate" id="iconSyncBillingOdp"></i> <span id="textSyncBillingOdp">Sync dari Billing</span>
+            </button>
+
             <!-- Tambah ODP Baru Modal Trigger -->
             <button type="button" onclick="openAddOdpModal()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
                 <i class="fa-solid fa-plus"></i> Tambah ODP
@@ -328,14 +333,19 @@
                             @endif
                         </td>
                         <td class="px-4 py-3">
-                            @if($odp->billingNode)
-                                <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                    [{{ $odp->billingNode->tenant_code }}] {{ $odp->billingNode->name }}
-                                </span>
+                            @if(!empty($odp->connected_billing_nodes) && count($odp->connected_billing_nodes) > 0)
+                                <div class="flex flex-wrap gap-1 max-w-xs">
+                                    @foreach($odp->connected_billing_nodes as $bNode)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="{{ $bNode->name }}">
+                                            [{{ $bNode->tenant_code }}] {{ \Illuminate\Support\Str::limit($bNode->name, 18) }}
+                                        </span>
+                                    @endforeach
+                                </div>
                             @else
                                 <span class="text-slate-400 text-[11px]">-</span>
                             @endif
                         </td>
+
                         <td class="px-4 py-3">
                             <div class="w-36">
                                 <div class="flex items-center justify-between text-[11px] mb-1 font-semibold">
@@ -484,19 +494,9 @@
                     <input type="text" name="code_odp" required placeholder="Contoh: ODP-TNG-W6-01" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Server Billing</label>
-                    <select name="billing_node_id" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
-                        <option value="">Pilih Server (Opsional)</option>
-                        @foreach($billingInstances as $b)
-                            <option value="{{ $b->id }}">[{{ $b->tenant_code }}] {{ $b->name }}</option>
-                        @endforeach
-                    </select>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Nama / Deskripsi ODP</label>
+                    <input type="text" name="name" placeholder="Contoh: ODP Depan Masjid Nurul Huda" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
                 </div>
-            </div>
-
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Nama / Deskripsi ODP</label>
-                <input type="text" name="name" placeholder="Contoh: ODP Depan Masjid Nurul Huda" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
             </div>
 
             <!-- Koordinat dengan fitur pilih titik di peta -->
@@ -593,19 +593,9 @@
                     <input type="text" name="code_odp" id="editCodeOdp" required class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Server Billing</label>
-                    <select name="billing_node_id" id="editBillingNodeId" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
-                        <option value="">Pilih Server</option>
-                        @foreach($billingInstances as $b)
-                            <option value="{{ $b->id }}">[{{ $b->tenant_code }}] {{ $b->name }}</option>
-                        @endforeach
-                    </select>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Nama / Deskripsi ODP</label>
+                    <input type="text" name="name" id="editName" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
                 </div>
-            </div>
-
-            <div>
-                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Nama / Deskripsi ODP</label>
-                <input type="text" name="name" id="editName" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
             </div>
 
             <div>
@@ -956,10 +946,13 @@ function initOdpMap() {
         const occupancy = totalPorts > 0 ? Math.min(100, Math.round((usedPorts / totalPorts) * 100)) : 0;
         const custCount = odp.customers_count || 0;
 
-        let tenantName = 'Lokal';
-        if (odp.billing_node_id && bMap[odp.billing_node_id]) {
+        let tenantName = 'Semua Server';
+        if (odp.billing_summary) {
+            tenantName = escapeHtml(odp.billing_summary);
+        } else if (odp.billing_node_id && bMap[odp.billing_node_id]) {
             tenantName = escapeHtml(bMap[odp.billing_node_id].name || bMap[odp.billing_node_id].tenant_code);
         }
+
 
         // Photo thumbnail or placeholder
         let photoMarkup = '';
@@ -1171,7 +1164,6 @@ function openEditOdpModal(target) {
     document.getElementById('editModalCodeHeader').textContent = odp.code_odp;
     document.getElementById('editCodeOdp').value = odp.code_odp;
     document.getElementById('editName').value = odp.name || '';
-    document.getElementById('editBillingNodeId').value = odp.billing_node_id || '';
     document.getElementById('editLatitude').value = odp.latitude || '';
     document.getElementById('editLongitude').value = odp.longitude || '';
     document.getElementById('editTotalPorts').value = odp.total_ports || 16;
@@ -1277,7 +1269,16 @@ function loadOdpPortsData(odpId) {
 
         const odp = data.odp;
         document.getElementById('portsModalOdpCode').textContent = odp.code_odp;
-        document.getElementById('portsModalBilling').textContent = odp.billing_node ? `[${odp.billing_node.tenant_code}] ${odp.billing_node.name}` : 'Semua Server';
+        
+        let billingSubtitle = '';
+        if (odp.connected_nodes && odp.connected_nodes.length > 0) {
+            billingSubtitle = odp.connected_nodes.map(n => `[${n.tenant_code}] ${n.name}`).join(' • ');
+        } else if (odp.billing_node) {
+            billingSubtitle = `[${odp.billing_node.tenant_code}] ${odp.billing_node.name}`;
+        } else {
+            billingSubtitle = 'Semua Server';
+        }
+        document.getElementById('portsModalBilling').textContent = billingSubtitle;
         document.getElementById('portsModalCapacity').textContent = `Terpakai: ${odp.used_ports}/${odp.total_ports} Port`;
 
         renderPortsTable(data.ports, data.can_edit);
@@ -1310,32 +1311,44 @@ function renderPortsTable(ports, canEdit) {
         portCell.className = 'py-3 px-4 text-center font-bold text-slate-700 dark:text-slate-300 font-mono text-sm';
         portCell.textContent = p.port_number;
 
-        // 2. Customer Name & Info (matching image 2: Fikrih - Standard)
+        // 2. Customer Name & Info
         const nameCell = document.createElement('td');
         nameCell.className = 'py-3 px-4';
-        if (p.customer) {
-            const cust = p.customer;
-            nameCell.innerHTML = `
-                <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                    <span>${escapeHtml(cust.name)}</span>
-                    ${cust.billing_node ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">[${escapeHtml(cust.billing_node.tenant_code)}]</span>` : ''}
-                    <span class="text-slate-400 font-normal text-[11px]">- ${escapeHtml(cust.package_name || 'Standard')}</span>
-                </div>
-                <div class="text-[10px] text-slate-400 font-mono mt-0.5">
-                    <span class="text-emerald-600 dark:text-emerald-400 font-semibold">${escapeHtml(cust.no_services)}</span>
-                    ${cust.phone ? ` • <i class="fa-brands fa-whatsapp text-emerald-500 text-[9px]"></i> ${escapeHtml(cust.phone)}` : ''}
-                    ${cust.address ? ` • <span title="${escapeHtml(cust.address)}">${escapeHtml(cust.address.substring(0, 35))}${cust.address.length > 35 ? '...' : ''}</span>` : ''}
-                </div>
-            `;
+
+        const custs = (p.all_customers && p.all_customers.length > 0) ? p.all_customers : (p.customer ? [p.customer] : []);
+
+        if (custs.length > 0) {
+            let custHtml = '';
+            if (p.is_conflict) {
+                custHtml += `<div class="mb-1 text-[10px] font-bold text-rose-500 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Terdeteksi ${custs.length} Pelanggan di Port ini (Konflik Port)</div>`;
+            }
+            custs.forEach((cust, cIdx) => {
+                custHtml += `
+                    <div class="${cIdx > 0 ? 'mt-2 pt-2 border-t border-slate-100 dark:border-slate-800' : ''}">
+                        <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                            <span>${escapeHtml(cust.name)}</span>
+                            ${cust.billing_node ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">[${escapeHtml(cust.billing_node.tenant_code)}]</span>` : ''}
+                            <span class="text-slate-400 font-normal text-[11px]">- ${escapeHtml(cust.package_name || 'Standard')}</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono mt-0.5">
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">${escapeHtml(cust.no_services)}</span>
+                            ${cust.phone ? ` • <i class="fa-brands fa-whatsapp text-emerald-500 text-[9px]"></i> ${escapeHtml(cust.phone)}` : ''}
+                            ${cust.address ? ` • <span title="${escapeHtml(cust.address)}">${escapeHtml(cust.address.substring(0, 35))}${cust.address.length > 35 ? '...' : ''}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            nameCell.innerHTML = custHtml;
         } else {
             nameCell.innerHTML = `<span class="text-slate-400 dark:text-slate-500 italic text-[11px]">Port Kosong (Tersedia)</span>`;
         }
 
-        // 3. Status Badge (matching image 2: Aktif)
+        // 3. Status Badge
         const statusCell = document.createElement('td');
         statusCell.className = 'py-3 px-4 text-center';
-        if (p.customer) {
-            const st = (p.customer.status || '').toLowerCase();
+        if (custs.length > 0) {
+            const firstCust = custs[0];
+            const st = (firstCust.status || '').toLowerCase();
             if (st === 'active' || st === 'aktif') {
                 statusCell.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40">Aktif</span>`;
             } else if (st === 'isolated' || st === 'isolir') {
@@ -1347,22 +1360,27 @@ function renderPortsTable(ports, canEdit) {
             statusCell.innerHTML = `<span class="text-slate-300 dark:text-slate-600">-</span>`;
         }
 
-        // 4. Action Buttons (matching image 2: Edit pen icon)
+        // 4. Action Buttons
         const actionCell = document.createElement('td');
         actionCell.className = 'py-3 px-4 text-center';
 
         if (canEdit) {
-            if (p.customer) {
-                actionCell.innerHTML = `
-                    <div class="flex items-center justify-center gap-1">
-                        <button type="button" onclick="openAssignPortModal(${p.port_number})" class="w-8 h-8 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 flex items-center justify-center transition-colors" title="Ubah / Ganti Pelanggan Port ${p.port_number}">
-                            <i class="fa-solid fa-pen-to-square text-sm"></i>
-                        </button>
-                        <button type="button" onclick="detachCustomerPort(${p.port_number}, '${escapeHtml(p.customer.name)}')" class="w-8 h-8 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center justify-center transition-colors" title="Lepas Pelanggan dari Port ${p.port_number}">
+            if (custs.length > 0) {
+                let actionHtml = `<div class="flex items-center justify-center gap-1">`;
+                actionHtml += `
+                    <button type="button" onclick="openAssignPortModal(${p.port_number})" class="w-8 h-8 rounded-lg text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 flex items-center justify-center transition-colors" title="Ubah / Ganti Pelanggan Port ${p.port_number}">
+                        <i class="fa-solid fa-pen-to-square text-sm"></i>
+                    </button>
+                `;
+                custs.forEach(c => {
+                    actionHtml += `
+                        <button type="button" onclick="detachCustomerPort(${p.port_number}, '${escapeHtml(c.name)}', ${c.id})" class="w-8 h-8 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center justify-center transition-colors" title="Lepas ${escapeHtml(c.name)} dari Port ${p.port_number}">
                             <i class="fa-solid fa-link-slash text-xs"></i>
                         </button>
-                    </div>
-                `;
+                    `;
+                });
+                actionHtml += `</div>`;
+                actionCell.innerHTML = actionHtml;
             } else {
                 actionCell.innerHTML = `
                     <button type="button" onclick="openAssignPortModal(${p.port_number})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 text-[11px] font-bold border border-emerald-200 dark:border-emerald-800/40 transition-colors mx-auto">
@@ -1381,6 +1399,7 @@ function renderPortsTable(ports, canEdit) {
         tbody.appendChild(tr);
     });
 }
+
 
 function renderUnassignedCustomers(unassigned, canEdit) {
     const sec = document.getElementById('unassignedCustomersSection');
@@ -1449,13 +1468,13 @@ function searchCustomersForPort(query) {
     const container = document.getElementById('assignSearchResultsList');
     container.innerHTML = `<div class="p-4 text-center text-xs text-slate-400"><i class="fa-solid fa-circle-notch fa-spin text-emerald-500 mr-1"></i> Mencari...</div>`;
 
-    fetch(`/maps/odp/${currentActiveOdpId}/search-customers?q=${encodeURIComponent(query)}`, {
+    fetch(`/maps/odp/${currentActiveOdpId}/search-customers?q=${encodeURIComponent(query)}&all_nodes=1`, {
         headers: { 'Accept': 'application/json' }
     })
     .then(res => res.json())
     .then(data => {
         if (!data.customers || data.customers.length === 0) {
-            container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">Tidak ada pelanggan yang cocok di server billing ini.</div>`;
+            container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">Tidak ada pelanggan yang cocok.</div>`;
             return;
         }
 
@@ -1480,8 +1499,9 @@ function searchCustomersForPort(query) {
 
             div.innerHTML = `
                 <div>
-                    <div class="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <div class="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                         <span>${escapeHtml(c.name)}</span>
+                        ${c.billing_node ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">[${escapeHtml(c.billing_node.tenant_code)}]</span>` : ''}
                         ${isCurrentlyOnOdp ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">Port Saat Ini: ${c.port_number || 'Belum diatur'}</span>` : ''}
                     </div>
                     <div class="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
@@ -1535,7 +1555,7 @@ function executeAssignCustomerToPort(portNumber, customerId) {
     });
 }
 
-function detachCustomerPort(portNumber, customerName) {
+function detachCustomerPort(portNumber, customerName, customerId = null) {
     if (!canEditPorts) return;
     window.confirmAction({
         title: 'Lepas Pelanggan dari Port',
@@ -1548,6 +1568,11 @@ function detachCustomerPort(portNumber, customerName) {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
                 || document.querySelector('input[name="_token"]')?.value;
 
+            const payload = { port_number: portNumber };
+            if (customerId) {
+                payload.customer_id = customerId;
+            }
+
             fetch(`/maps/odp/${currentActiveOdpId}/detach-port`, {
                 method: 'POST',
                 headers: {
@@ -1555,9 +1580,7 @@ function detachCustomerPort(portNumber, customerName) {
                     'X-CSRF-TOKEN': csrfToken,
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({
-                    port_number: portNumber
-                })
+                body: JSON.stringify(payload)
             })
             .then(res => res.json())
             .then(res => {
@@ -1574,6 +1597,7 @@ function detachCustomerPort(portNumber, customerName) {
         }
     });
 }
+
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -1596,6 +1620,57 @@ function confirmDeleteOdp(id, code) {
         onConfirm: () => {
             const form = document.getElementById(`deleteOdpForm-${id}`);
             if (form) form.submit();
+        }
+    });
+}
+
+function triggerOdpSync() {
+    window.confirmAction({
+        title: 'Sinkronkan Master Data ODP',
+        message: 'Tarik seluruh data master ODP (koordinat, kapasitas port, foto fisik, dan catatan tiang) langsung dari database server billing ke central-ticketing tanpa memerlukan data pelanggan?',
+        confirmText: 'Ya, Mulai Sinkronisasi',
+        confirmClass: 'bg-sky-600 hover:bg-sky-500 text-white',
+        icon: 'fa-solid fa-arrows-rotate',
+        iconBg: 'bg-sky-100 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400',
+        onConfirm: () => {
+            const btn = document.getElementById('btnSyncBillingOdp');
+            const icon = document.getElementById('iconSyncBillingOdp');
+            const text = document.getElementById('textSyncBillingOdp');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+            if (btn) btn.disabled = true;
+            if (icon) icon.classList.add('fa-spin');
+            if (text) text.innerText = 'Menyinkronkan...';
+
+            fetch('{{ route('odp.sync') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    billing_node_id: '{{ request('billing_node_id') }}' || null
+                })
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) {
+                    showToast(res.message, 'success');
+                    setTimeout(() => window.location.reload(), 1200);
+                } else {
+                    showToast(res.message || 'Gagal menyinkronkan ODP.', 'error');
+                    if (btn) btn.disabled = false;
+                    if (icon) icon.classList.remove('fa-spin');
+                    if (text) text.innerText = 'Sync dari Billing';
+                }
+            })
+            .catch(err => {
+                showToast('Kesalahan jaringan: ' + err.message, 'error');
+                if (btn) btn.disabled = false;
+                if (icon) icon.classList.remove('fa-spin');
+                if (text) text.innerText = 'Sync dari Billing';
+            });
         }
     });
 }
