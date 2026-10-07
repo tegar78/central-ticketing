@@ -60,7 +60,6 @@ SVG;
             [
                 'code_odp'        => 'ODP-TNG-W6-01',
                 'name'            => 'ODP Daan Mogot Km 21',
-                'billing_node_id' => $billingId,
                 'latitude'        => '-6.178210',
                 'longitude'       => '106.631820',
                 'total_ports'     => 16,
@@ -74,7 +73,6 @@ SVG;
             [
                 'code_odp'        => 'ODP-TEKO-S15-02',
                 'name'            => 'ODP Benteng Betawi (Alfamart)',
-                'billing_node_id' => $billingId,
                 'latitude'        => '-6.182450',
                 'longitude'       => '106.638910',
                 'total_ports'     => 16,
@@ -88,7 +86,6 @@ SVG;
             [
                 'code_odp'        => 'ODP-TNG-V6-03',
                 'name'            => 'ODP Simpang Sudirman',
-                'billing_node_id' => $billingId,
                 'latitude'        => '-6.171120',
                 'longitude'       => '106.645310',
                 'total_ports'     => 16,
@@ -102,7 +99,6 @@ SVG;
             [
                 'code_odp'        => 'ODP-TNG-U11-04',
                 'name'            => 'ODP Poris Indah Blok C3',
-                'billing_node_id' => $billingId,
                 'latitude'        => '-6.165400',
                 'longitude'       => '106.627800',
                 'total_ports'     => 16,
@@ -116,7 +112,6 @@ SVG;
             [
                 'code_odp'        => 'ODP-KBD-01',
                 'name'            => 'ODP Kebon Dalem',
-                'billing_node_id' => $billingId,
                 'latitude'        => '-6.189500',
                 'longitude'       => '106.621200',
                 'total_ports'     => 16,
@@ -131,7 +126,7 @@ SVG;
 
         foreach ($odps as $data) {
             Odp::updateOrCreate(
-                ['code_odp' => $data['code_odp'], 'billing_node_id' => $data['billing_node_id']],
+                ['code_odp' => $data['code_odp']],
                 $data
             );
         }

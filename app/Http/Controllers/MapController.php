@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRole;
+use App\Models\BillingInstance;
+use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Models\Customer;
-use App\Models\BillingInstance;
 
 class MapController extends Controller
 {
@@ -82,7 +83,7 @@ class MapController extends Controller
             'free'     => 0,
         ];
 
-        if (in_array($user->role, ['admin', 'operator'])) {
+        if (in_array($user->role, [UserRole::Admin->value, UserRole::Operator->value])) {
             $unmarkedStatus = $request->query('unmarked_status');
             $unmarkedSearch = $request->query('unmarked_search');
 
@@ -150,7 +151,7 @@ class MapController extends Controller
     public function updateCoordinates(Request $request, string|int $id)
     {
         $user = Auth::user();
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             abort(403, 'Akses ditolak. Teknisi tidak memiliki izin untuk menandai atau mengubah titik koordinat GPS pelanggan.');
         }
         $request->validate([

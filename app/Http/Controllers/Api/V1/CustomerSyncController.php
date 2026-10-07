@@ -56,27 +56,31 @@ class CustomerSyncController extends Controller
             ];
         }
 
-        // Perform bulk upsert based on composite unique index ['billing_node_id', 'remote_customer_id']
-        Customer::upsert(
-            $upsertData,
-            ['billing_node_id', 'remote_customer_id'],
-            [
-                'no_services',
-                'name',
-                'phone',
-                'address',
-                'odp_name',
-                'port_number',
-                'ip_address',
-                'pppoe_user',
-                'latitude',
-                'longitude',
-                'package_name',
-                'monthly_fee',
-                'status',
-                'updated_at'
-            ]
-        );
+        // Perform chunked bulk upsert inside transaction to prevent MariaDB placeholder limit crash
+        \Illuminate\Support\Facades\DB::transaction(function () use ($upsertData) {
+            foreach (array_chunk($upsertData, 300) as $chunk) {
+                Customer::upsert(
+                    $chunk,
+                    ['billing_node_id', 'remote_customer_id'],
+                    [
+                        'no_services',
+                        'name',
+                        'phone',
+                        'address',
+                        'odp_name',
+                        'port_number',
+                        'ip_address',
+                        'pppoe_user',
+                        'latitude',
+                        'longitude',
+                        'package_name',
+                        'monthly_fee',
+                        'status',
+                        'updated_at'
+                    ]
+                );
+            }
+        });
 
         $count = count($upsertData);
 

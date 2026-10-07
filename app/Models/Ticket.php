@@ -1,8 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
+use App\Enums\TicketStatus;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Ticket extends Model
 {
@@ -25,17 +30,17 @@ class Ticket extends Model
         'created_by_role',
     ];
 
-    public function billingInstance()
+    public function billingInstance(): BelongsTo
     {
         return $this->belongsTo(BillingInstance::class);
     }
 
-    public function assignedTechnician()
+    public function assignedTechnician(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_technician_id');
     }
 
-    public function timelines()
+    public function timelines(): HasMany
     {
         return $this->hasMany(TicketTimeline::class);
     }
@@ -45,7 +50,7 @@ class Ticket extends Model
      */
     public function isClosed(): bool
     {
-        return $this->status === 'close';
+        return $this->status === TicketStatus::Close->value;
     }
 
     /**
@@ -53,28 +58,37 @@ class Ticket extends Model
      */
     public function getClosedAtAttribute()
     {
-        if ($this->status !== 'close') {
+        if ($this->status !== TicketStatus::Close->value) {
             return null;
         }
-        $closeTimeline = $this->timelines->where('status', 'close')->sortByDesc('created_at')->first();
-        return $closeTimeline?->created_at ?? $this->updated_at;
+
+        if ($this->relationLoaded('timelines')) {
+            $closeTimeline = $this->timelines->where('status', TicketStatus::Close->value)->sortByDesc('created_at')->first();
+            return $closeTimeline?->created_at ?? $this->updated_at;
+        }
+
+        return $this->updated_at;
     }
 
     /**
      * Accessor for technician action / remark (cleaned without client device audit trail)
      */
-    public function getActionRemarkAttribute()
+    public function getActionRemarkAttribute(): string
     {
-        $closeTimeline = $this->timelines->where('status', 'close')->sortByDesc('created_at')->first();
-        if ($closeTimeline && !empty($closeTimeline->remark)) {
-            return $this->cleanActionRemark($closeTimeline->remark);
+        if ($this->relationLoaded('timelines')) {
+            $closeTimeline = $this->timelines->where('status', TicketStatus::Close->value)->sortByDesc('created_at')->first();
+            if ($closeTimeline && !empty($closeTimeline->remark)) {
+                return $this->cleanActionRemark($closeTimeline->remark);
+            }
+            $processTimeline = $this->timelines->where('status', TicketStatus::Process->value)->sortByDesc('created_at')->first();
+            if ($processTimeline && !empty($processTimeline->remark)) {
+                return $this->cleanActionRemark($processTimeline->remark);
+            }
+            $otherTimeline = $this->timelines->whereNotNull('remark')->sortByDesc('created_at')->first();
+            return $otherTimeline ? $this->cleanActionRemark($otherTimeline->remark) : '-';
         }
-        $processTimeline = $this->timelines->where('status', 'process')->sortByDesc('created_at')->first();
-        if ($processTimeline && !empty($processTimeline->remark)) {
-            return $this->cleanActionRemark($processTimeline->remark);
-        }
-        $otherTimeline = $this->timelines->whereNotNull('remark')->sortByDesc('created_at')->first();
-        return $otherTimeline ? $this->cleanActionRemark($otherTimeline->remark) : '-';
+
+        return '-';
     }
 
     /**
@@ -90,17 +104,17 @@ class Ticket extends Model
 
         // 1. Strip device/browser audit log suffix
         $cleaned = preg_replace('/\s+dari\s+(?:Windows|Unknown|Android|iOS|MacOS|Macintosh|Linux|Chrome|Edge|Firefox|Safari|Opera|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1).*$/i', '', $remark);
-        $cleaned = trim($cleaned);
+        $cleaned = trim((string) $cleaned);
 
         // 2. Strip "Ubah status ke [Status] ([Close]):" prefix
         $cleaned = preg_replace('/^ubah\s+status\s+(?:ke\s+)?[^:]*:\s*/i', '', $cleaned);
 
         // Also handle case where there was no colon e.g. "Ubah status ke Selesai (Close)"
-        $cleaned = preg_replace('/^ubah\s+status\s+(?:ke\s+)?[^(:]*(?:\([^)]*\))?\s*$/i', '', $cleaned);
+        $cleaned = preg_replace('/^ubah\s+status\s+(?:ke\s+)?[^(:]*(?:\([^)]*\))?\s*$/i', '', (string) $cleaned);
 
-        $cleaned = trim($cleaned);
+        $cleaned = trim((string) $cleaned);
         $cleaned = preg_replace('/^:\s*/', '', $cleaned);
-        $cleaned = preg_replace('/:\s*$/', '', $cleaned);
+        $cleaned = preg_replace('/:\s*$/', '', (string) $cleaned);
 
         return $cleaned !== '' ? $cleaned : '-';
     }
@@ -108,7 +122,7 @@ class Ticket extends Model
     /**
      * Accessor for combined report description
      */
-    public function getKeteranganLaporanAttribute()
+    public function getKeteranganLaporanAttribute(): string
     {
         if ($this->category_name && $this->problem_description && $this->category_name !== $this->problem_description) {
             return "[{$this->category_name}] {$this->problem_description}";

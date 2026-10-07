@@ -1,11 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Services\DatabaseBackupService;
 use App\Services\TelegramService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BackupController extends Controller
@@ -18,7 +22,7 @@ class BackupController extends Controller
     /**
      * Display database backup management dashboard.
      */
-    public function index()
+    public function index(): View
     {
         $backups = $this->backupService->listBackups();
         $totalCount = count($backups);
@@ -55,7 +59,7 @@ class BackupController extends Controller
     /**
      * Create a new database backup manually.
      */
-    public function create(Request $request)
+    public function create(Request $request): RedirectResponse
     {
         $compress = $request->boolean('gzip', true);
         $notify = $request->boolean('notify', false);
@@ -68,9 +72,10 @@ class BackupController extends Controller
 
         // Optional Telegram notification
         if ($notify && $this->telegramService->isConfigured()) {
+            $userName = htmlspecialchars(auth()->user()?->name ?? 'Admin', ENT_QUOTES, 'UTF-8');
             $msg = "💾 <b>DATABASE BACKUP MANUAL BERHASIL</b>\n";
-            $msg .= "------------------------------------\n";
-            $msg .= "<b>Admin:</b> " . htmlspecialchars(auth()->user()->name ?? 'Admin') . "\n";
+            $msg .= "━━━━━━━━━━━━━━━━━━━━\n";
+            $msg .= "<b>Admin:</b> {$userName}\n";
             $msg .= "<b>File:</b> <code>{$result['filename']}</code>\n";
             $msg .= "<b>Ukuran:</b> {$result['human_size']}\n";
             $msg .= "<b>Durasi:</b> {$result['duration']} detik\n";
@@ -89,13 +94,18 @@ class BackupController extends Controller
      */
     public function download(string $filename): BinaryFileResponse
     {
-        $path = $this->backupService->getBackupPath($filename);
+        $cleanName = basename($filename);
+        if (!preg_match('/^backup-[a-zA-Z0-9_\-]+\.sql(\.gz)?$/', $cleanName)) {
+            abort(404, 'Nama file backup tidak valid.');
+        }
+
+        $path = $this->backupService->getBackupPath($cleanName);
 
         if (!$path) {
             abort(404, 'File backup tidak ditemukan.');
         }
 
-        return response()->download($path, basename($path), [
+        return response()->download($path, $cleanName, [
             'Content-Type' => 'application/octet-stream',
         ]);
     }
@@ -103,15 +113,20 @@ class BackupController extends Controller
     /**
      * Delete a backup file.
      */
-    public function destroy(string $filename)
+    public function destroy(string $filename): RedirectResponse
     {
-        $deleted = $this->backupService->deleteBackup($filename);
-
-        if ($deleted) {
-            return redirect()->route('backups.index')->with('success', "File backup '{$filename}' berhasil dihapus.");
+        $cleanName = basename($filename);
+        if (!preg_match('/^backup-[a-zA-Z0-9_\-]+\.sql(\.gz)?$/', $cleanName)) {
+            return redirect()->route('backups.index')->with('error', 'Nama file backup tidak valid.');
         }
 
-        return redirect()->route('backups.index')->with('error', "Gagal menghapus file '{$filename}'.");
+        $deleted = $this->backupService->deleteBackup($cleanName);
+
+        if ($deleted) {
+            return redirect()->route('backups.index')->with('success', "File backup '{$cleanName}' berhasil dihapus.");
+        }
+
+        return redirect()->route('backups.index')->with('error', "Gagal menghapus file '{$cleanName}'.");
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\BillingInstance;
 use App\Models\Customer;
 use App\Models\Odp;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -230,6 +231,8 @@ class OdpSyncService
 
             $status = ($usedPorts >= $totalPorts && $totalPorts > 0) ? 'full' : ($existing?->status ?? 'active');
 
+            $defaultUserId = User::where('role', 'admin')->value('id') ?? User::first()?->id ?? null;
+
             Odp::updateOrCreate(
                 [
                     'code_odp' => $normalizedCode,
@@ -243,7 +246,7 @@ class OdpSyncService
                     'status'      => $status,
                     'photo_path'  => $photoPath,
                     'notes'       => $notes,
-                    'created_by'  => $existing?->created_by ?? 1,
+                    'created_by'  => $existing?->created_by ?? $defaultUserId,
                 ]
             );
 
@@ -297,20 +300,38 @@ class OdpSyncService
                             ? (int)$odpItem['total_ports']
                             : (!empty($odpItem['total_port']) ? (int)$odpItem['total_port'] : 16);
 
-                        $lat = !empty($odpItem['latitude']) && $odpItem['latitude'] !== '0' ? (string)$odpItem['latitude'] : null;
-                        $lng = !empty($odpItem['longitude']) && $odpItem['longitude'] !== '0' ? (string)$odpItem['longitude'] : null;
+                        $existingOdp = Odp::where('code_odp', $normalizedCode)->first();
+
+                        // Coordinates: Only update if remote provides valid non-empty GPS; otherwise strictly preserve existing
+                        $finalLat = (!empty($lat) && $lat !== '0') ? $lat : ($existingOdp?->latitude ?? null);
+                        $finalLng = (!empty($lng) && $lng !== '0') ? $lng : ($existingOdp?->longitude ?? null);
+
+                        // Photo: Keep existing survey photo if remote has none
+                        $photo = !empty($odpItem['photo']) && $odpItem['photo'] !== '-' ? trim($odpItem['photo']) : null;
+                        if (empty($photo) && !empty($odpItem['photo_path']) && $odpItem['photo_path'] !== '-') {
+                            $photo = trim($odpItem['photo_path']);
+                        }
+                        $finalPhoto = !empty($photo) ? $photo : ($existingOdp?->photo_path ?? null);
+
+                        // Notes & Address
+                        $notes = $odpItem['notes'] ?? $odpItem['remark'] ?? null;
+                        $finalNotes = !empty($notes) ? $notes : ($existingOdp?->notes ?? null);
+
+                        $defaultUserId = User::where('role', 'admin')->value('id') ?? User::first()?->id ?? null;
 
                         Odp::updateOrCreate(
                             [
                                 'code_odp' => $normalizedCode,
                             ],
                             [
-                                'name'        => $odpItem['name'] ?? ('ODP ' . $clean),
-                                'latitude'    => $lat,
-                                'longitude'   => $lng,
+                                'name'        => $odpItem['name'] ?? ($existingOdp?->name ?? ('ODP ' . $clean)),
+                                'latitude'    => $finalLat,
+                                'longitude'   => $finalLng,
                                 'total_ports' => max(16, $totalPorts),
-                                'notes'       => $odpItem['notes'] ?? $odpItem['remark'] ?? null,
-                                'created_by'  => 1,
+                                'photo_path'  => $finalPhoto,
+                                'address'     => $odpItem['address'] ?? ($existingOdp?->address ?? null),
+                                'notes'       => $finalNotes,
+                                'created_by'  => $existingOdp?->created_by ?? $defaultUserId,
                             ]
                         );
                         $count++;

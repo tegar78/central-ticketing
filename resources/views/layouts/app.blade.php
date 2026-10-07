@@ -16,18 +16,12 @@
             document.documentElement.classList.remove('dark');
         }
     </script>
-    <!-- Compiled Vite Assets -->
+    <!-- Compiled Vite Assets (Tailwind CSS v4 & App JS) -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <!-- Tailwind CSS CDN Fallback -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js CDN for Analytics & Volumes -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Tailwind Configuration -->
-    <script src="{{ asset('js/tailwind-config.js') }}"></script>
-    <!-- Application Stylesheet -->
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     @stack('styles')
 </head>
 <body class="bg-[#F8F9FA] dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen antialiased flex selection:bg-emerald-500/20 selection:text-emerald-700 transition-colors duration-200">

@@ -1,12 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TicketStatus;
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-
+use App\Http\Requests\Tickets\StoreTicketRequest;
+use App\Jobs\SendTicketTelegramNotificationJob;
 use App\Models\Ticket;
 use App\Models\TicketTimeline;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class TicketApiController extends Controller
@@ -14,61 +20,53 @@ class TicketApiController extends Controller
     /**
      * Ingest new ticket from CI billing instance
      */
-    public function store(Request $request)
+    public function store(StoreTicketRequest $request): JsonResponse
     {
         $tenant = $request->attributes->get('tenant');
-
-        $validated = $request->validate([
-            'remote_ticket_id' => 'nullable|string',
-            'no_services' => 'required|string',
-            'customer_name' => 'required|string',
-            'customer_phone' => 'nullable|string',
-            'customer_address' => 'nullable|string',
-            'latitude' => 'nullable|string',
-            'longitude' => 'nullable|string',
-            'category_name' => 'nullable|string',
-            'problem_description' => 'required|string',
-            'picture' => 'nullable|string',
-            'created_by_name' => 'nullable|string',
-            'created_by_role' => 'nullable|string',
-        ]);
-
+        $validated = $request->validated();
         $ticketNumber = 'TKT-' . date('Ymd') . '-' . strtoupper(Str::random(5));
 
-        $ticket = Ticket::create([
-            'ticket_number' => $ticketNumber,
-            'billing_instance_id' => $tenant->id,
-            'remote_ticket_id' => $validated['remote_ticket_id'] ?? null,
-            'no_services' => $validated['no_services'],
-            'customer_name' => $validated['customer_name'],
-            'customer_phone' => $validated['customer_phone'] ?? null,
-            'customer_address' => $validated['customer_address'] ?? null,
-            'latitude' => $validated['latitude'] ?? null,
-            'longitude' => $validated['longitude'] ?? null,
-            'category_name' => $validated['category_name'] ?? null,
-            'problem_description' => $validated['problem_description'],
-            'picture' => $validated['picture'] ?? null,
-            'status' => 'pending',
-            'created_by_name' => $validated['created_by_name'] ?? 'System',
-            'created_by_role' => $validated['created_by_role'] ?? 'Client',
-        ]);
+        $ticket = DB::transaction(function () use ($validated, $ticketNumber, $tenant) {
+            $ticket = Ticket::create([
+                'ticket_number'       => $ticketNumber,
+                'billing_instance_id' => $tenant->id,
+                'remote_ticket_id'    => $validated['remote_ticket_id'] ?? null,
+                'no_services'         => $validated['no_services'],
+                'customer_name'       => $validated['customer_name'],
+                'customer_phone'      => $validated['customer_phone'] ?? null,
+                'customer_address'    => $validated['customer_address'] ?? null,
+                'latitude'            => $validated['latitude'] ?? null,
+                'longitude'           => $validated['longitude'] ?? null,
+                'category_name'       => $validated['category_name'] ?? null,
+                'problem_description' => $validated['problem_description'],
+                'picture'             => $validated['picture'] ?? null,
+                'status'              => TicketStatus::Pending->value,
+                'created_by_name'     => $validated['created_by_name'] ?? 'System',
+                'created_by_role'     => $validated['created_by_role'] ?? 'Client',
+            ]);
 
-        TicketTimeline::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => null,
-            'status' => 'pending',
-            'remark' => 'Tiket dibuat via ' . $tenant->name,
-        ]);
+            TicketTimeline::create([
+                'ticket_id' => $ticket->id,
+                'user_id'   => null,
+                'status'    => TicketStatus::Pending->value,
+                'remark'    => 'Tiket dibuat via ' . $tenant->name,
+            ]);
+
+            return $ticket;
+        });
+
+        // Dispatch Telegram Notification secara langsung
+        SendTicketTelegramNotificationJob::dispatchSync($ticket, 'ticket_created', $ticket->problem_description, null);
 
         return response()->json([
             'success' => true,
             'message' => 'Tiket berhasil diterima di Central System',
-            'data' => [
-                'ticket_id' => $ticket->id,
+            'data'    => [
+                'ticket_id'     => $ticket->id,
                 'ticket_number' => $ticket->ticket_number,
-                'status' => $ticket->status,
-                'tenant_code' => $tenant->tenant_code,
-            ]
+                'status'        => $ticket->status,
+                'tenant_code'   => $tenant->tenant_code,
+            ],
         ], 201);
     }
 

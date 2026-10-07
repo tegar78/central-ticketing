@@ -57,16 +57,28 @@ class CustomerController extends Controller
 
         $customers = $query->paginate(25)->withQueryString();
 
-        // Overall Stats
-        $totalCustomers = Customer::count();
-        $activeCustomers = Customer::where('status', 'active')->count();
-        $isolatedCustomers = Customer::where('status', 'isolated')->count();
-        $inactiveCustomers = Customer::where('status', 'inactive')->count();
-        $freeCustomers = Customer::where('status', 'free')->count();
+        // Overall Stats via single aggregated query to eliminate multiple full table scans
+        $stats = Customer::toBase()
+            ->selectRaw("
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
+                COUNT(CASE WHEN status = 'isolated' THEN 1 END) as isolated,
+                COUNT(CASE WHEN status = 'inactive' THEN 1 END) as inactive,
+                COUNT(CASE WHEN status = 'free' THEN 1 END) as free
+            ")
+            ->first();
+
+        $totalCustomers = (int) ($stats->total ?? 0);
+        $activeCustomers = (int) ($stats->active ?? 0);
+        $isolatedCustomers = (int) ($stats->isolated ?? 0);
+        $inactiveCustomers = (int) ($stats->inactive ?? 0);
+        $freeCustomers = (int) ($stats->free ?? 0);
 
         $billingInstances = BillingInstance::where('is_active', true)->get();
         $billingMap = $billingInstances->keyBy('id');
-        $odpList = Customer::whereNotNull('odp_name')->where('odp_name', '!=', '')->distinct()->pluck('odp_name');
+        $odpList = \Illuminate\Support\Facades\Cache::remember('customer_unique_odp_list', 300, function () {
+            return Customer::whereNotNull('odp_name')->where('odp_name', '!=', '')->distinct()->pluck('odp_name')->all();
+        });
         $tenants = $billingInstances;
 
         return view('customers.index', compact(
@@ -322,28 +334,16 @@ class CustomerController extends Controller
         $tenantCode = $request->input('tenant_code');
 
         if ($tenantCode === 'all') {
-            \Illuminate\Support\Facades\Artisan::call('sync:billing-customers', [
-                '--all' => true
-            ]);
-            $totalCount = Customer::count();
-            return back()->with('success', "Sinkronisasi data pelanggan dari semua server billing selesai. Total data saat ini: {$totalCount} pelanggan.");
+            \App\Jobs\SyncBillingCustomersJob::dispatch(null, true);
+            return back()->with('success', "Perintah sinkronisasi seluruh server billing telah dijadwalkan di antrean sistem background.");
         }
 
         $tenantCode = $tenantCode ?: 'BILL-001';
         $instance = BillingInstance::where('tenant_code', $tenantCode)->first();
 
-        \Illuminate\Support\Facades\Artisan::call('sync:billing-customers', [
-            'tenant_code' => $tenantCode
-        ]);
+        \App\Jobs\SyncBillingCustomersJob::dispatch($tenantCode, false);
 
-        $syncedCount = $instance ? Customer::where('billing_node_id', $instance->id)->count() : 0;
-
-        if ($syncedCount > 0) {
-            return back()->with('success', "Sinkronisasi berhasil! Ditemukan {$syncedCount} pelanggan dari server billing {$tenantCode}.");
-        }
-
-        $domain = $instance?->domain_url ?? 'belum diatur';
-        return back()->with('warning', "Sinkronisasi {$tenantCode} selesai tetapi 0 data tersimpan. Periksa URL server billing ({$domain}) dan API Key.");
+        return back()->with('success', "Sinkronisasi server billing {$tenantCode} sedang diproses di background.");
     }
 
     /**

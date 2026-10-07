@@ -26,7 +26,7 @@ class ListBillingInstancesCommand extends Command
         $rows = [];
         foreach ($instances as $inst) {
             $customerCount = Customer::where('billing_node_id', $inst->id)->count();
-            $odpCount = Odp::where('billing_node_id', $inst->id)->count();
+            $odpCount = Odp::forBillingNode($inst->id)->count();
 
             $rows[] = [
                 $inst->id,

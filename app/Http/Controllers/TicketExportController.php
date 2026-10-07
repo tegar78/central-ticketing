@@ -18,15 +18,15 @@ use Barryvdh\DomPDF\Facade\Pdf;
 class TicketExportController extends Controller
 {
     /**
-     * Retrieve tickets matching current filters and user role permissions.
+     * Retrieve tickets query matching current filters and user role permissions.
      */
-    protected function getFilteredTickets(Request $request)
+    protected function getFilteredTicketsQuery(Request $request)
     {
         $user = Auth::user();
         $query = Ticket::with(['billingInstance', 'assignedTechnician', 'timelines']);
 
         // Strict role scoping: Technicians can only export tickets assigned to them
-        if ($user->role === 'technician') {
+        if ($user->role === \App\Enums\UserRole::Technician->value) {
             $query->where('assigned_technician_id', $user->id);
         } else {
             // Admin & Operator filters
@@ -51,7 +51,15 @@ class TicketExportController extends Controller
             });
         }
 
-        return $query->latest()->get();
+        return $query->latest();
+    }
+
+    /**
+     * Retrieve tickets matching current filters and user role permissions.
+     */
+    protected function getFilteredTickets(Request $request)
+    {
+        return $this->getFilteredTicketsQuery($request)->get();
     }
 
     /**
@@ -59,7 +67,7 @@ class TicketExportController extends Controller
      */
     public function exportCsv(Request $request)
     {
-        $tickets = $this->getFilteredTickets($request);
+        $tickets = $this->getFilteredTicketsQuery($request)->cursor();
         $filename = 'tickets_export_' . date('Ymd_His') . '.csv';
 
         $response = new StreamedResponse(function () use ($tickets) {

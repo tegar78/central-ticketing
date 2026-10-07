@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
+use App\Enums\TicketStatus;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
@@ -15,8 +18,8 @@ class TelegramService
 
     public function __construct()
     {
-        $this->botToken = config('services.telegram.bot_token') ?: env('TELEGRAM_BOT_TOKEN');
-        $this->chatId   = config('services.telegram.chat_id') ?: env('TELEGRAM_GROUP_CHAT_ID');
+        $this->botToken = config('services.telegram.bot_token');
+        $this->chatId   = config('services.telegram.chat_id');
     }
 
     /**
@@ -41,7 +44,7 @@ class TelegramService
 
         try {
             $url = "https://api.telegram.org/bot{$this->botToken}/sendMessage";
-            $verifySsl = (bool) env('TELEGRAM_VERIFY_SSL', true);
+            $verifySsl = (bool) config('services.telegram.verify_ssl', true);
 
             $client = $verifySsl ? Http::timeout(5) : Http::withoutVerifying()->timeout(5);
             $response = $client->asJson()->post($url, [
@@ -58,7 +61,8 @@ class TelegramService
             Log::warning("TelegramService: Failed to send message (HTTP {$response->status()}): " . $response->body());
             return false;
         } catch (Throwable $e) {
-            Log::warning("TelegramService: Exception while sending message: " . $e->getMessage());
+            $sanitizedError = $this->botToken ? str_replace($this->botToken, '***MASKED***', $e->getMessage()) : $e->getMessage();
+            Log::warning("TelegramService: Exception while sending message: {$sanitizedError}");
             return false;
         }
     }
@@ -79,7 +83,7 @@ class TelegramService
         }
 
         // Header and Icon based on event & status
-        $status = strtolower($ticket->status);
+        $status = strtolower($ticket->status instanceof TicketStatus ? $ticket->status->value : (string) $ticket->status);
         switch ($eventType) {
             case 'ticket_created':
                 $headerTitle = "🆕 <b>TIKET GANGGUAN BARU</b>";

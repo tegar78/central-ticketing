@@ -391,6 +391,28 @@ class OdpPortManagementTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('ODP-TEST-01');
     }
+
+    public function test_odp_index_page_renders_with_cached_billing_nodes(): void
+    {
+        Customer::create([
+            'billing_node_id' => $this->billing->id,
+            'remote_customer_id' => 'REMOTE-MAP-001',
+            'name' => 'Customer Map Test',
+            'no_services' => '2026999',
+            'odp_name' => 'ODP-TEST-01',
+            'status' => 'active',
+        ]);
+
+        // First visit: populates cache
+        $response1 = $this->actingAs($this->admin)->get('/maps/odp');
+        $response1->assertStatus(200);
+
+        // Second visit: reads from cache without Incomplete Class error
+        $response2 = $this->actingAs($this->admin)->get('/maps/odp');
+        $response2->assertStatus(200);
+        $response2->assertSee('ODP-TEST-01');
+    }
 }
+
 
 

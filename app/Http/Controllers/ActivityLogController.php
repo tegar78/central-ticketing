@@ -1,19 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Enums\UserRole;
 use App\Models\TicketTimeline;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
 
 class ActivityLogController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): View
     {
         $user = Auth::user();
 
         // Teknisi tidak memiliki akses ke log aktivitas sistem
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             abort(403, 'Akses ditolak. Teknisi tidak memiliki akses ke log aktivitas sistem.');
         }
 

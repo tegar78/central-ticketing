@@ -1,18 +1,27 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
+use App\Enums\TicketStatus;
+use App\Enums\UserRole;
+use App\Http\Requests\Tickets\StoreTicketRequest;
+use App\Http\Requests\Tickets\UpdateTicketStatusRequest;
+use App\Jobs\DispatchBillingWebhookJob;
+use App\Jobs\SendTicketTelegramNotificationJob;
+use App\Models\BillingInstance;
+use App\Models\Customer;
 use App\Models\Ticket;
 use App\Models\TicketTimeline;
-use App\Models\BillingInstance;
 use App\Models\User;
-use App\Models\Customer;
 use App\Services\TelegramService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
 
 class TicketWebController extends Controller
 {
@@ -23,14 +32,14 @@ class TicketWebController extends Controller
     /**
      * Display centralized tickets directory with search, filters & export options
      */
-    public function index(Request $request)
+    public function index(Request $request): View
     {
         $user = Auth::user();
 
         $query = Ticket::with(['billingInstance', 'assignedTechnician']);
 
         // Role scoping: technician only sees assigned tickets
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             $query->where('assigned_technician_id', $user->id);
         } else {
             if ($request->filled('billing_instance_id')) {
@@ -58,17 +67,17 @@ class TicketWebController extends Controller
 
         // Calculate counts for quick status navigation pills
         $baseCountQuery = Ticket::query();
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             $baseCountQuery->where('assigned_technician_id', $user->id);
         }
 
-        $pendingCount = (clone $baseCountQuery)->where('status', 'pending')->count();
-        $processCount = (clone $baseCountQuery)->where('status', 'process')->count();
-        $closeCount = (clone $baseCountQuery)->where('status', 'close')->count();
+        $pendingCount = (clone $baseCountQuery)->where('status', TicketStatus::Pending->value)->count();
+        $processCount = (clone $baseCountQuery)->where('status', TicketStatus::Process->value)->count();
+        $closeCount = (clone $baseCountQuery)->where('status', TicketStatus::Close->value)->count();
         $totalCount = (clone $baseCountQuery)->count();
 
         $tenants = BillingInstance::where('is_active', true)->withCount('customers')->get();
-        $technicians = User::where('role', 'technician')->where('is_active', true)->get();
+        $technicians = User::where('role', UserRole::Technician->value)->where('is_active', true)->get();
         $totalCustomersCount = Customer::count();
 
         return view('tickets.index', compact(
@@ -87,90 +96,75 @@ class TicketWebController extends Controller
     /**
      * Store a new ticket created manually by admin/operator
      */
-    public function store(Request $request)
+    public function store(StoreTicketRequest $request): RedirectResponse
     {
         $user = Auth::user();
 
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             abort(403, 'Teknisi tidak dapat membuat tiket baru.');
         }
 
-        $validated = $request->validate([
-            'billing_instance_id' => 'required|exists:billing_instances,id',
-            'customer_name' => 'required|string|max:255',
-            'customer_phone' => 'nullable|string|max:20',
-            'customer_address' => 'nullable|string',
-            'no_services' => 'required|string|max:100',
-            'category_name' => 'nullable|string|max:100',
-            'problem_description' => 'required|string',
-            'latitude' => 'nullable|string|max:50',
-            'longitude' => 'nullable|string|max:50',
-        ]);
-
+        $validated = $request->validated();
         $ticketNumber = 'TKT-' . date('Ymd') . '-' . strtoupper(Str::random(5));
 
-        $ticket = Ticket::create([
-            'ticket_number' => $ticketNumber,
-            'billing_instance_id' => $validated['billing_instance_id'],
-            'no_services' => $validated['no_services'],
-            'customer_name' => $validated['customer_name'],
-            'customer_phone' => $validated['customer_phone'] ?? null,
-            'customer_address' => $validated['customer_address'] ?? null,
-            'latitude' => $validated['latitude'] ?? null,
-            'longitude' => $validated['longitude'] ?? null,
-            'category_name' => $validated['category_name'] ?? null,
-            'problem_description' => $validated['problem_description'],
-            'status' => 'pending',
-            'created_by_name' => $user->name,
-            'created_by_role' => $user->role,
-        ]);
+        $ticket = DB::transaction(function () use ($validated, $ticketNumber, $user, $request) {
+            $ticket = Ticket::create([
+                'ticket_number' => $ticketNumber,
+                'billing_instance_id' => $validated['billing_instance_id'],
+                'no_services' => $validated['no_services'],
+                'customer_name' => $validated['customer_name'],
+                'customer_phone' => $validated['customer_phone'] ?? null,
+                'customer_address' => $validated['customer_address'] ?? null,
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
+                'category_name' => $validated['category_name'] ?? null,
+                'problem_description' => $validated['problem_description'],
+                'status' => TicketStatus::Pending->value,
+                'created_by_name' => $user->name,
+                'created_by_role' => $user->role,
+            ]);
 
-        $deviceInfo = $this->getClientDeviceInfo($request);
+            $deviceInfo = $this->getClientDeviceInfo($request);
 
-        TicketTimeline::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'status' => 'pending',
-            'remark' => "Tambah Tiket Gangguan dari {$deviceInfo}",
-        ]);
+            TicketTimeline::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $user->id,
+                'status' => TicketStatus::Pending->value,
+                'remark' => "Tambah Tiket Gangguan dari {$deviceInfo}",
+            ]);
 
-        // Webhook callback to CI Billing Instance (e.g. billingtest.gayuh.net.id.test)
-        $response = $this->dispatchBillingWebhook($ticket->billingInstance, [
-            'event'               => 'ticket_created',
-            'ticket_number'       => $ticket->ticket_number,
-            'remote_ticket_id'    => $ticket->remote_ticket_id ?? $ticket->ticket_number,
-            'no_services'         => $ticket->no_services,
-            'customer_name'       => $ticket->customer_name,
-            'customer_phone'      => $ticket->customer_phone,
-            'status'              => $ticket->status,
-            'category_name'       => $ticket->category_name,
-            'problem_description' => $ticket->problem_description,
-            'created_by_name'     => $user->name,
-            'created_by_role'     => $user->role,
-            'updated_by_name'     => $user->name,
-            'updated_by_role'     => $user->role,
-        ]);
+            return $ticket;
+        });
 
-        if ($response && $response->successful()) {
-            $resData = $response->json();
-            if (!empty($resData['help_id'])) {
-                $ticket->update(['remote_ticket_id' => $resData['help_id']]);
-            }
+        // Webhook callback to CI Billing Instance dispatched via Queue
+        if ($ticket->billingInstance) {
+            DispatchBillingWebhookJob::dispatch($ticket->billingInstance, [
+                'event'               => 'ticket_created',
+                'ticket_number'       => $ticket->ticket_number,
+                'remote_ticket_id'    => $ticket->remote_ticket_id ?? $ticket->ticket_number,
+                'no_services'         => $ticket->no_services,
+                'customer_name'       => $ticket->customer_name,
+                'customer_phone'      => $ticket->customer_phone,
+                'status'              => $ticket->status,
+                'category_name'       => $ticket->category_name,
+                'problem_description' => $ticket->problem_description,
+                'created_by_name'     => $user->name,
+                'created_by_role'     => $user->role,
+                'updated_by_name'     => $user->name,
+                'updated_by_role'     => $user->role,
+            ], $ticket->id);
         }
 
-        // Kirim Notifikasi ke Grup Telegram
-        $this->telegramService->sendTicketNotification($ticket, 'ticket_created', $ticket->problem_description, $user);
+        // Kirim Notifikasi ke Grup Telegram secara langsung
+        SendTicketTelegramNotificationJob::dispatchSync($ticket, 'ticket_created', $ticket->problem_description, $user);
 
         return back()->with('success', "Tiket {$ticketNumber} berhasil dibuat dan disinkronkan ke billing.");
     }
 
     /**
      * Display the specified ticket details.
-     *
-     * @param string|int $id
-     * @return \Illuminate\View\View
      */
-    public function show(string|int $id)
+    public function show(string|int $id): View
     {
         $user = Auth::user();
 
@@ -178,27 +172,23 @@ class TicketWebController extends Controller
             ->findOrFail($id);
 
         // Security check for technician role
-        if ($user->role === 'technician' && $ticket->assigned_technician_id !== $user->id) {
+        if ($user->role === UserRole::Technician->value && $ticket->assigned_technician_id !== $user->id) {
             abort(403, 'Anda tidak memiliki akses ke tiket ini.');
         }
 
-        $technicians = User::where('role', 'technician')->where('is_active', true)->get();
+        $technicians = User::where('role', UserRole::Technician->value)->where('is_active', true)->get();
 
         return view('tickets.show', compact('ticket', 'user', 'technicians'));
     }
 
     /**
      * Assign a technician to the specified ticket.
-     *
-     * @param Request $request
-     * @param string|int $id
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function assignTechnician(Request $request, string|int $id)
+    public function assignTechnician(Request $request, string|int $id): RedirectResponse
     {
         $user = Auth::user();
 
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             abort(403, 'Teknisi tidak dapat merubah penugasan teknisi.');
         }
 
@@ -213,47 +203,46 @@ class TicketWebController extends Controller
         }
 
         $technician = User::findOrFail($request->technician_id);
-
-        $ticket->update([
-            'assigned_technician_id' => $technician->id,
-        ]);
-
         $deviceInfo = $this->getClientDeviceInfo($request);
         $remark = "Ditugaskan ke teknisi: {$technician->name} dari {$deviceInfo}";
 
-        TicketTimeline::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'status' => $ticket->status,
-            'remark' => $remark,
-        ]);
+        DB::transaction(function () use ($ticket, $technician, $user, $remark) {
+            $ticket->update([
+                'assigned_technician_id' => $technician->id,
+            ]);
 
-        // Webhook callback to CI Billing Instance
-        $this->dispatchBillingWebhook($ticket->billingInstance, [
-            'event'            => 'technician_assigned',
-            'ticket_number'    => $ticket->ticket_number,
-            'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
-            'status'           => $ticket->status,
-            'remark'           => $remark,
-            'technician_name'  => $technician->name,
-            'updated_by_name'  => $user->name,
-            'updated_by_role'  => $user->role,
-        ]);
+            TicketTimeline::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $user->id,
+                'status' => $ticket->status,
+                'remark' => $remark,
+            ]);
+        });
 
-        // Kirim Notifikasi ke Grup Telegram
-        $this->telegramService->sendTicketNotification($ticket, 'technician_assigned', $remark, $user);
+        // Webhook callback to CI Billing Instance via Queue
+        if ($ticket->billingInstance) {
+            DispatchBillingWebhookJob::dispatch($ticket->billingInstance, [
+                'event'            => 'technician_assigned',
+                'ticket_number'    => $ticket->ticket_number,
+                'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
+                'status'           => $ticket->status,
+                'remark'           => $remark,
+                'technician_name'  => $technician->name,
+                'updated_by_name'  => $user->name,
+                'updated_by_role'  => $user->role,
+            ]);
+        }
+
+        // Kirim Notifikasi ke Grup Telegram secara langsung
+        SendTicketTelegramNotificationJob::dispatchSync($ticket, 'technician_assigned', $remark, $user);
 
         return back()->with('success', "Tiket berhasil ditugaskan ke Teknisi {$technician->name}.");
     }
 
     /**
      * Update ticket status and trigger webhook callback.
-     *
-     * @param Request $request
-     * @param string|int $id
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function updateStatus(Request $request, string|int $id)
+    public function updateStatus(UpdateTicketStatusRequest $request, string|int $id): RedirectResponse
     {
         $user = Auth::user();
         $ticket = Ticket::findOrFail($id);
@@ -262,45 +251,44 @@ class TicketWebController extends Controller
             return back()->with('error', 'Tiket ini telah berstatus Selesai (Closed) dan terkunci. Status tidak dapat diperbarui lagi.');
         }
 
-        if ($user->role === 'technician' && $ticket->assigned_technician_id !== $user->id) {
+        if ($user->role === UserRole::Technician->value && $ticket->assigned_technician_id !== $user->id) {
             abort(403, 'Anda tidak memiliki akses ke tiket ini.');
         }
 
-        $validated = $request->validate([
-            'status' => 'required|in:pending,process,close',
-            'remark' => 'required|string',
-        ]);
-
-        $ticket->update([
-            'status' => $validated['status'],
-        ]);
-
+        $validated = $request->validated();
         $deviceInfo = $this->getClientDeviceInfo($request);
-        $statusLabels = ['pending' => 'Pending', 'process' => 'Dalam Proses', 'close' => 'Selesai (Close)'];
-        $statusLabel = $statusLabels[$validated['status']] ?? $validated['status'];
-        $remarkText = "Ubah status ke {$statusLabel}: {$validated['remark']} dari {$deviceInfo}";
+        $statusEnum = $validated['status'] instanceof TicketStatus ? $validated['status'] : TicketStatus::from((string) $validated['status']);
+        $remarkText = "Ubah status ke {$statusEnum->label()}: {$validated['remark']} dari {$deviceInfo}";
 
-        TicketTimeline::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'status' => $validated['status'],
-            'remark' => $remarkText,
-        ]);
+        DB::transaction(function () use ($ticket, $statusEnum, $user, $remarkText) {
+            $ticket->update([
+                'status' => $statusEnum->value,
+            ]);
 
-        // Webhook callback to CI Billing Instance
-        $this->dispatchBillingWebhook($ticket->billingInstance, [
-            'event'            => 'status_updated',
-            'ticket_number'    => $ticket->ticket_number,
-            'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
-            'status'           => $validated['status'],
-            'remark'           => $validated['remark'],
-            'technician_name'  => $user->name,
-            'updated_by_name'  => $user->name,
-            'updated_by_role'  => $user->role,
-        ]);
+            TicketTimeline::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $user->id,
+                'status' => $statusEnum->value,
+                'remark' => $remarkText,
+            ]);
+        });
 
-        // Kirim Notifikasi ke Grup Telegram
-        $this->telegramService->sendTicketNotification($ticket, 'status_updated', $validated['remark'], $user);
+        // Webhook callback to CI Billing Instance via Queue
+        if ($ticket->billingInstance) {
+            DispatchBillingWebhookJob::dispatch($ticket->billingInstance, [
+                'event'            => 'status_updated',
+                'ticket_number'    => $ticket->ticket_number,
+                'remote_ticket_id' => $ticket->remote_ticket_id ?? $ticket->ticket_number,
+                'status'           => $statusEnum->value,
+                'remark'           => $validated['remark'],
+                'technician_name'  => $user->name,
+                'updated_by_name'  => $user->name,
+                'updated_by_role'  => $user->role,
+            ]);
+        }
+
+        // Kirim Notifikasi ke Grup Telegram secara langsung
+        SendTicketTelegramNotificationJob::dispatchSync($ticket, 'status_updated', $validated['remark'], $user);
 
         return back()->with('success', 'Status tiket berhasil diperbarui & disinkronkan ke billing.');
     }

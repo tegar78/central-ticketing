@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRole;
+use App\Jobs\BroadcastOdpToBillingInstancesJob;
 use App\Models\BillingInstance;
 use App\Models\Customer;
 use App\Models\Odp;
 use App\Services\OdpSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -24,13 +27,36 @@ class OdpController extends Controller
         $billingNodeId = $request->query('billing_node_id');
         $search = $request->query('search');
 
-        $customerNodes = DB::table('customers')
-            ->join('billing_instances', 'customers.billing_node_id', '=', 'billing_instances.id')
-            ->whereNotNull('customers.odp_name')
-            ->select('customers.odp_name as code_odp', 'billing_instances.id', 'billing_instances.tenant_code', 'billing_instances.name')
-            ->distinct()
-            ->get()
-            ->groupBy('code_odp');
+        $rawCustomerNodes = Cache::remember('odp_customer_billing_nodes_map', 300, function () {
+            $rows = DB::table('customers')
+                ->join('billing_instances', 'customers.billing_node_id', '=', 'billing_instances.id')
+                ->whereNotNull('customers.odp_name')
+                ->select('customers.odp_name as code_odp', 'billing_instances.id', 'billing_instances.tenant_code', 'billing_instances.name')
+                ->distinct()
+                ->get();
+
+            $grouped = [];
+            foreach ($rows as $row) {
+                $grouped[$row->code_odp][] = [
+                    'id'          => (int) $row->id,
+                    'tenant_code' => (string) $row->tenant_code,
+                    'name'        => (string) $row->name,
+                ];
+            }
+
+            return $grouped;
+        });
+
+        $getNodeCollection = function (?string $code) use ($rawCustomerNodes) {
+            if (!$code || !isset($rawCustomerNodes[$code])) {
+                return collect();
+            }
+
+            return collect($rawCustomerNodes[$code])
+                ->map(fn($item) => (object) $item)
+                ->unique('id')
+                ->values();
+        };
 
         // 1. Base query for physical ODP boxes (globally unified master)
         $baseQuery = Odp::query();
@@ -60,7 +86,7 @@ class OdpController extends Controller
 
         // Attach billing summary and physical port occupancy to map markers
         foreach ($markedOdps as $m) {
-            $mNodes = ($customerNodes->get($m->code_odp) ?? collect())->unique('id')->values();
+            $mNodes = $getNodeCollection($m->code_odp);
             $m->connected_billing_nodes = $mNodes;
             $m->billing_summary = $mNodes->map(fn($n) => "[{$n->tenant_code}]")->implode(' ') ?: 'Semua Server';
             if (!$billingNodeId) {
@@ -180,7 +206,7 @@ class OdpController extends Controller
 
         // Enrich paginated rows with cross-tenant billing nodes and occupancy stats
         foreach ($odpList as $odp) {
-            $odpNodes = ($customerNodes->get($odp->code_odp) ?? collect())->unique('id')->values();
+            $odpNodes = $getNodeCollection($odp->code_odp);
             $odp->connected_billing_nodes = $odpNodes;
             if (!$billingNodeId) {
                 $odp->used_ports = (int) $odp->customers_count;
@@ -278,6 +304,7 @@ class OdpController extends Controller
 
         // Auto-broadcast dan sinkronkan ODP baru ke semua billing instances
         $this->broadcastOdpToBillingInstances($odp);
+        Cache::forget('odp_customer_billing_nodes_map');
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -296,7 +323,7 @@ class OdpController extends Controller
     public function syncBillingOdps(Request $request, OdpSyncService $syncService)
     {
         $user = Auth::user();
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             abort(403, 'Akses ditolak. Teknisi tidak memiliki hak untuk menyinkronkan master data ODP.');
         }
 
@@ -318,6 +345,8 @@ class OdpController extends Controller
             $message = "Sinkronisasi selesai! Total {$res['total_synced']} data ODP berhasil disinkronkan dari seluruh server billing ({$res['total_physical_boxes']} titik fisik ODP).";
             $res['message'] = $message;
         }
+
+        Cache::forget('odp_customer_billing_nodes_map');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json($res);
@@ -353,7 +382,7 @@ class OdpController extends Controller
     public function update(Request $request, string|int $id)
     {
         $user = Auth::user();
-        if ($user->role === 'technician') {
+        if ($user->role === UserRole::Technician->value) {
             abort(403, 'Akses ditolak. Teknisi hanya diizinkan untuk mengunggah atau mengganti foto ODP.');
         }
 
@@ -400,6 +429,10 @@ class OdpController extends Controller
         ];
 
         $odp->update($updateData);
+
+        // Broadcast updates to billing instances and clear cache
+        $this->broadcastOdpToBillingInstances($odp);
+        Cache::forget('odp_customer_billing_nodes_map');
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -559,7 +592,7 @@ class OdpController extends Controller
     public function assignPort(Request $request, int $id)
     {
         $user = Auth::user();
-        if (!in_array($user->role, ['admin', 'operator'])) {
+        if (!in_array($user->role, [UserRole::Admin->value, UserRole::Operator->value])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Akses ditolak. Role teknisi hanya memiliki hak baca (read-only).'
@@ -576,50 +609,58 @@ class OdpController extends Controller
         $portNumber = (int) $validated['port_number'];
         $customer = Customer::findOrFail($validated['customer_id']);
 
-        // If another customer was previously on this exact port in this physical ODP, detach them
-        Customer::where('odp_name', $odp->code_odp)
-            ->where('port_number', $portNumber)
-            ->where('id', '!=', $customer->id)
-            ->update([
-                'port_number' => null
+        return DB::transaction(function () use ($odp, $customer, $portNumber) {
+            // If another customer was previously on this exact port in this physical ODP, detach them and sync billing
+            $previousCustomer = Customer::where('odp_name', $odp->code_odp)
+                ->where('port_number', $portNumber)
+                ->where('id', '!=', $customer->id)
+                ->first();
+
+            if ($previousCustomer) {
+                $previousCustomer->update([
+                    'port_number' => null
+                ]);
+                $this->syncCustomerToBillingNode($odp, $previousCustomer, null);
+            }
+
+            // Assign customer to this ODP and port
+            $customer->update([
+                'odp_name'    => $odp->code_odp,
+                'port_number' => $portNumber,
             ]);
 
-        // Assign customer to this ODP and port
-        $customer->update([
-            'odp_name'    => $odp->code_odp,
-            'port_number' => $portNumber,
-        ]);
+            // Sync to remote billing node if connected
+            $this->syncCustomerToBillingNode($odp, $customer, $portNumber);
 
-        // Sync to remote billing node if connected
-        $this->syncCustomerToBillingNode($odp, $customer, $portNumber);
+            // Recalculate used_ports and status
+            $usedCount = Customer::where('odp_name', $odp->code_odp)
+                ->whereNotNull('port_number')
+                ->pluck('port_number')
+                ->unique()
+                ->count();
 
-        // Recalculate used_ports and status
-        $usedCount = Customer::where('odp_name', $odp->code_odp)
-            ->whereNotNull('port_number')
-            ->pluck('port_number')
-            ->unique()
-            ->count();
+            $newStatus = ($usedCount >= $odp->total_ports && $odp->status === 'active') ? 'full' : ($odp->status === 'full' && $usedCount < $odp->total_ports ? 'active' : $odp->status);
 
-        $newStatus = ($usedCount >= $odp->total_ports && $odp->status === 'active') ? 'full' : ($odp->status === 'full' && $usedCount < $odp->total_ports ? 'active' : $odp->status);
-
-        $odp->update([
-            'used_ports' => $usedCount,
-            'status'     => $newStatus,
-        ]);
-
-        $odp->refresh();
-        $matrix = $odp->getPortMatrix();
-
-        return response()->json([
-            'success' => true,
-            'message' => "Pelanggan [{$customer->name}] berhasil dipasang ke Port {$portNumber} ODP {$odp->code_odp}.",
-            'ports'   => $matrix['ports'],
-            'odp'     => [
-                'id'         => $odp->id,
+            $odp->update([
                 'used_ports' => $usedCount,
-                'status'     => $odp->status,
-            ],
-        ]);
+                'status'     => $newStatus,
+            ]);
+
+            $odp->refresh();
+            $matrix = $odp->getPortMatrix();
+            Cache::forget('odp_customer_billing_nodes_map');
+
+            return response()->json([
+                'success' => true,
+                'message' => "Pelanggan [{$customer->name}] berhasil dipasang ke Port {$portNumber} ODP {$odp->code_odp}.",
+                'ports'   => $matrix['ports'],
+                'odp'     => [
+                    'id'         => $odp->id,
+                    'used_ports' => $usedCount,
+                    'status'     => $odp->status,
+                ],
+            ]);
+        });
     }
 
     /**
@@ -628,7 +669,7 @@ class OdpController extends Controller
     public function detachPort(Request $request, int $id)
     {
         $user = Auth::user();
-        if (!in_array($user->role, ['admin', 'operator'])) {
+        if (!in_array($user->role, [UserRole::Admin->value, UserRole::Operator->value])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Akses ditolak. Role teknisi hanya memiliki hak baca (read-only).'
@@ -680,6 +721,7 @@ class OdpController extends Controller
 
             $odp->refresh();
             $matrix = $odp->getPortMatrix();
+            Cache::forget('odp_customer_billing_nodes_map');
 
             return response()->json([
                 'success' => true,
@@ -744,71 +786,10 @@ class OdpController extends Controller
     }
 
     /**
-     * Broadcast newly created or updated ODP to all active billing instances
+     * Broadcast newly created or updated ODP to all active billing instances asynchronously
      */
     protected function broadcastOdpToBillingInstances(Odp $odp): void
     {
-        $tenants = BillingInstance::where('is_active', true)->get();
-        $cleanCode = preg_replace('/^ODP-/i', '', $odp->code_odp);
-
-        foreach ($tenants as $tenant) {
-            // 1. Direct DB insertion into m_odp if direct DB is accessible
-            try {
-                $conn = $tenant->getDatabaseConnection() ?: ($tenant->tenant_code === 'BILL-001' ? DB::connection('billing_ci3') : null);
-                if ($conn) {
-                    $exists = $conn->table('m_odp')
-                        ->where('code_odp', $odp->code_odp)
-                        ->orWhere('code_odp', $cleanCode)
-                        ->exists();
-
-                    if (!$exists) {
-                        $conn->table('m_odp')->insert([
-                            'code_odp'   => $cleanCode,
-                            'latitude'   => $odp->latitude,
-                            'longitude'  => $odp->longitude,
-                            'total_port' => $odp->total_ports,
-                            'remark'     => $odp->notes ?? $odp->name,
-                            'created'    => time(),
-                            'create_by'  => 0,
-                        ]);
-                        \Illuminate\Support\Facades\Log::info("Auto-added ODP {$cleanCode} to billing DB [{$tenant->tenant_code}]");
-                    } else {
-                        $conn->table('m_odp')
-                            ->where('code_odp', $odp->code_odp)
-                            ->orWhere('code_odp', $cleanCode)
-                            ->update([
-                                'latitude'   => $odp->latitude,
-                                'longitude'  => $odp->longitude,
-                                'total_port' => $odp->total_ports,
-                                'remark'     => $odp->notes ?? $odp->name,
-                            ]);
-                    }
-                }
-            } catch (\Throwable $e) {
-                // Direct DB skipped if connection not available
-            }
-
-            // 2. HTTP push notification if billing instance has domain_url
-            if (!empty($tenant->domain_url)) {
-                try {
-                    \Illuminate\Support\Facades\Http::withoutVerifying()
-                        ->timeout(3)
-                        ->withHeaders([
-                            'X-API-Key' => $tenant->api_key,
-                            'Accept'    => 'application/json',
-                        ])
-                        ->post(rtrim($tenant->domain_url, '/') . '/central/odp_sync', [
-                            'code_odp'    => $odp->code_odp,
-                            'clean_code'  => $cleanCode,
-                            'name'        => $odp->name,
-                            'latitude'    => $odp->latitude,
-                            'longitude'   => $odp->longitude,
-                            'total_ports' => $odp->total_ports,
-                        ]);
-                } catch (\Throwable $e) {
-                    // Silently ignore if webhook not supported by this billing instance
-                }
-            }
-        }
+        BroadcastOdpToBillingInstancesJob::dispatch($odp);
     }
 }

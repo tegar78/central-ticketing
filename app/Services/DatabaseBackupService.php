@@ -138,6 +138,7 @@ class DatabaseBackupService
         $port = $config['port'] ?? 3306;
         $db = $config['database'] ?? '';
         $user = $config['username'] ?? 'root';
+        $pass = $config['password'] ?? '';
         $tempCnf = null;
         $cnfArg = '';
 
@@ -385,6 +386,12 @@ SQL;
     public function getBackupPath(string $filename): ?string
     {
         $cleanName = basename($filename);
+
+        // Security check: Only allow .sql and .sql.gz backup files, disallow hidden files
+        if (str_starts_with($cleanName, '.') || (!str_ends_with($cleanName, '.sql') && !str_ends_with($cleanName, '.sql.gz'))) {
+            return null;
+        }
+
         $path = $this->backupDir . DIRECTORY_SEPARATOR . $cleanName;
 
         if (File::exists($path)) {

@@ -13,10 +13,9 @@
             document.documentElement.classList.remove('dark');
         }
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Compiled Vite Assets (Tailwind CSS v4 & App JS) -->
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Tailwind Configuration -->
-    <script src="{{ asset('js/tailwind-config.js') }}"></script>
     <!-- Authentication Stylesheet (Neumorphism Design System) -->
     <link rel="stylesheet" href="{{ asset('css/auth.css') }}">
 </head>

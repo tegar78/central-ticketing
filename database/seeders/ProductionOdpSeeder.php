@@ -20,7 +20,7 @@ class ProductionOdpSeeder extends Seeder
         $billingId = $billing ? $billing->id : 1;
 
         $admin = User::where('role', 'admin')->first();
-        $adminId = $admin ? $admin->id : 1;
+        $adminId = $admin ? $admin->id : (User::first()?->id ?? null);
 
         // Raw input dataset from field survey
         $rawRecords = [
@@ -408,7 +408,6 @@ class ProductionOdpSeeder extends Seeder
             }
 
             $processed[$code] = [
-                'billing_node_id' => $billingId,
                 'code_odp'        => $code,
                 'name'            => 'ODP ' . preg_replace('/^ODP-?/i', '', $code),
                 'latitude'        => $lat,
@@ -438,7 +437,7 @@ class ProductionOdpSeeder extends Seeder
             foreach ($chunks as $chunk) {
                 Odp::upsert(
                     $chunk,
-                    ['billing_node_id', 'code_odp'],
+                    ['code_odp'],
                     ['name', 'latitude', 'longitude', 'status', 'notes', 'updated_at']
                 );
                 $insertedCount += count($chunk);

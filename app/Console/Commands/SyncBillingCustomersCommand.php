@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\BillingInstance;
 use App\Models\Customer;
 use App\Models\Odp;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Carbon;
@@ -398,8 +399,8 @@ class SyncBillingCustomersCommand extends Command
                 ->get();
 
             if ($portRows->isNotEmpty()) {
-                $allOdps = Odp::where('billing_node_id', $tenant->id)->get()->keyBy('code_odp');
-                $allOdpsById = Odp::where('billing_node_id', $tenant->id)->get()->keyBy('id');
+                $allOdps = Odp::all()->keyBy('code_odp');
+                $allOdpsById = Odp::all()->keyBy('id');
 
                 $updatedCount = 0;
                 foreach ($portRows as $row) {
@@ -535,18 +536,22 @@ class SyncBillingCustomersCommand extends Command
                             }
                         }
 
+                        $defaultUserId = User::where('role', 'admin')->value('id') ?? User::first()?->id ?? null;
+                        $existingOdp = Odp::where('code_odp', $normalizedCode)->first();
+                        $finalLat = (!empty($lat) && $lat !== '0') ? $lat : ($existingOdp?->latitude ?? null);
+                        $finalLng = (!empty($lng) && $lng !== '0') ? $lng : ($existingOdp?->longitude ?? null);
+
                         Odp::updateOrCreate(
                             [
-                                'billing_node_id' => $tenant->id,
-                                'code_odp'        => $normalizedCode,
+                                'code_odp' => $normalizedCode,
                             ],
                             [
-                                'name'        => $odpItem['name'] ?? ('ODP ' . $clean),
-                                'latitude'    => $lat,
-                                'longitude'   => $lng,
+                                'name'        => $odpItem['name'] ?? ($existingOdp?->name ?? ('ODP ' . $clean)),
+                                'latitude'    => $finalLat,
+                                'longitude'   => $finalLng,
                                 'total_ports' => $totalPorts,
-                                'notes'       => $odpItem['notes'] ?? $odpItem['remark'] ?? null,
-                                'created_by'  => 1,
+                                'notes'       => $odpItem['notes'] ?? $odpItem['remark'] ?? $existingOdp?->notes ?? null,
+                                'created_by'  => $existingOdp?->created_by ?? $defaultUserId,
                             ]
                         );
                         $count++;
@@ -620,6 +625,8 @@ class SyncBillingCustomersCommand extends Command
 
                 $totalPorts = max(16, (int)$maxPort);
 
+                $defaultUserId = User::where('role', 'admin')->value('id') ?? User::first()?->id ?? null;
+
                 $newOdp = Odp::create([
                     'code_odp'        => $code,
                     'name'            => 'ODP ' . $clean,
@@ -628,7 +635,7 @@ class SyncBillingCustomersCommand extends Command
                     'total_ports'     => $totalPorts,
                     'used_ports'      => 0,
                     'status'          => 'active',
-                    'created_by'      => 1,
+                    'created_by'      => $defaultUserId,
                 ]);
 
                 $existingOdps->put($code, $newOdp);
