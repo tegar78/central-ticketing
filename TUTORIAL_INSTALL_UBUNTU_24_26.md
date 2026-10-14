@@ -401,12 +401,21 @@ Jalankan skrip migrasi tabel dan sinkronisasi data ODP:
 # 1. Eksekusi skema migrasi tabel
 php artisan migrate --force
 
-# 2. (Opsional) Jalankan seeder akun bawaan jika instalasi fresh
+# 2. Jalankan seeder akun bawaan & tenant billing instance
 # Akun default: admin@central.local / password
 php artisan db:seed --force
 
-# 3. Sinkronisasi master data ODP canonical
-php artisan odp:sync
+# 3. Pilihan Inisialisasi Data ODP:
+
+# PILIHAN A (Direkomendasikan untuk Fresh Install):
+# Langsung isi 400+ master titik ODP hasil survei riil lengkap dengan koordinat GPS:
+php artisan db:seed --class=ProductionOdpSeeder --force
+
+# PILIHAN B (Jika ingin menarik data langsung dari database billing CI3 lokal):
+# Berikan akses database billing ke 'ticket_user', lalu update kredensial billing instance:
+# sudo mysql -e "GRANT ALL PRIVILEGES ON \`bill3-gyh\`.* TO 'ticket_user'@'localhost'; FLUSH PRIVILEGES;"
+# php artisan tinker --execute="App\Models\BillingInstance::where('tenant_code', 'BILL-001')->update(['db_username' => 'ticket_user', 'db_password' => 'PasswordSuperAman84!']);"
+# php artisan odp:sync
 ```
 
 ---

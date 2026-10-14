@@ -15,7 +15,7 @@
                 <span>Manajemen User System</span>
             </h1>
             <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">
-                Kelola akun Admin, Operator, dan Teknisi penanggung jawab 60 billing.
+                Kelola akun Admin, Operator, dan Teknisi penanggung jawab billing.
             </p>
         </div>
         <div>
@@ -88,7 +88,7 @@
 
     <!-- Users Container -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm transition-colors">
-        
+
         <!-- Desktop Table View -->
         <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left border-collapse text-xs text-slate-700 dark:text-slate-300">
@@ -120,41 +120,41 @@
                         </td>
                         <td class="py-4 px-5">
                             @if($user->role === 'admin')
-                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40 uppercase tracking-wider">
-                                    <i class="fa-solid fa-shield-halved mr-1"></i> Admin
-                                </span>
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40 uppercase tracking-wider">
+                                <i class="fa-solid fa-shield-halved mr-1"></i> Admin
+                            </span>
                             @elseif($user->role === 'operator')
-                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/40 uppercase tracking-wider">
-                                    <i class="fa-solid fa-user-gear mr-1"></i> Operator
-                                </span>
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/40 uppercase tracking-wider">
+                                <i class="fa-solid fa-user-gear mr-1"></i> Operator
+                            </span>
                             @else
-                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
-                                    <i class="fa-solid fa-screwdriver-wrench mr-1"></i> Teknisi
-                                </span>
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
+                                <i class="fa-solid fa-screwdriver-wrench mr-1"></i> Teknisi
+                            </span>
                             @endif
                         </td>
                         <td class="py-4 px-5">
                             @if($user->is_active)
-                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
-                                    Aktif
-                                </span>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
+                                Aktif
+                            </span>
                             @else
-                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40 uppercase tracking-wider">
-                                    Nonaktif
-                                </span>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40 uppercase tracking-wider">
+                                Nonaktif
+                            </span>
                             @endif
                         </td>
                         <td class="py-4 px-5 text-right">
                             <div class="flex items-center justify-end gap-1.5">
-                                <button type="button" 
-                                    onclick="openEditModal(this)" 
+                                <button type="button"
+                                    onclick="openEditModal(this)"
                                     data-id="{{ $user->id }}"
                                     data-name="{{ $user->name }}"
                                     data-email="{{ $user->email }}"
                                     data-phone="{{ $user->phone ?? '' }}"
                                     data-role="{{ $user->role }}"
                                     data-active="{{ $user->is_active ? '1' : '0' }}"
-                                    class="min-h-[34px] min-w-[34px] p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/40 rounded-lg transition border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800/40 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-emerald-400" 
+                                    class="min-h-[34px] min-w-[34px] p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/40 rounded-lg transition border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800/40 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                     title="Edit User">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </button>
@@ -198,13 +198,13 @@
                     </div>
                     <div>
                         @if($user->is_active)
-                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
-                                Aktif
-                            </span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
+                            Aktif
+                        </span>
                         @else
-                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40 uppercase tracking-wider">
-                                Nonaktif
-                            </span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40 uppercase tracking-wider">
+                            Nonaktif
+                        </span>
                         @endif
                     </div>
                 </div>
@@ -212,17 +212,17 @@
                 <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
                     <div class="flex items-center gap-2">
                         @if($user->role === 'admin')
-                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40 uppercase tracking-wider">
-                                <i class="fa-solid fa-shield-halved mr-1"></i> Admin
-                            </span>
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40 uppercase tracking-wider">
+                            <i class="fa-solid fa-shield-halved mr-1"></i> Admin
+                        </span>
                         @elseif($user->role === 'operator')
-                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/40 uppercase tracking-wider">
-                                <i class="fa-solid fa-user-gear mr-1"></i> Operator
-                            </span>
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/40 uppercase tracking-wider">
+                            <i class="fa-solid fa-user-gear mr-1"></i> Operator
+                        </span>
                         @else
-                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
-                                <i class="fa-solid fa-screwdriver-wrench mr-1"></i> Teknisi
-                            </span>
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40 uppercase tracking-wider">
+                            <i class="fa-solid fa-screwdriver-wrench mr-1"></i> Teknisi
+                        </span>
                         @endif
 
                         @if($user->phone)
@@ -234,15 +234,15 @@
                     </div>
 
                     <div class="flex items-center gap-2">
-                        <button type="button" 
-                            onclick="openEditModal(this)" 
+                        <button type="button"
+                            onclick="openEditModal(this)"
                             data-id="{{ $user->id }}"
                             data-name="{{ $user->name }}"
                             data-email="{{ $user->email }}"
                             data-phone="{{ $user->phone ?? '' }}"
                             data-role="{{ $user->role }}"
                             data-active="{{ $user->is_active ? '1' : '0' }}"
-                            class="min-h-[38px] px-3 py-1.5 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-xl transition border border-emerald-200 dark:border-emerald-800/50 flex items-center justify-center gap-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400" 
+                            class="min-h-[38px] px-3 py-1.5 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-xl transition border border-emerald-200 dark:border-emerald-800/50 flex items-center justify-center gap-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400"
                             title="Edit User">
                             <i class="fa-solid fa-pen-to-square"></i>
                             <span>Edit</span>
@@ -395,6 +395,7 @@
     function openCreateModal() {
         document.getElementById('createModal').classList.remove('hidden');
     }
+
     function closeCreateModal() {
         document.getElementById('createModal').classList.add('hidden');
     }
@@ -416,6 +417,7 @@
 
         document.getElementById('editModal').classList.remove('hidden');
     }
+
     function closeEditModal() {
         document.getElementById('editModal').classList.add('hidden');
     }

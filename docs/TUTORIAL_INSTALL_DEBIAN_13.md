@@ -420,12 +420,22 @@ Jalankan perintah migrasi skema tabel ke MariaDB:
 # 1. Jalankan migrasi seluruh tabel aplikasi
 php artisan migrate --force
 
-# 2. (Opsional) Jalankan seeding akun default jika database masih kosong
+# 2. Jalankan seeding akun default & tenant billing instance
 # Menghasilkan admin default: admin@central.local / password
 php artisan db:seed --force
 
-# 3. Jalankan sinkronisasi master data ODP awal
-php artisan odp:sync
+# 3. Pilihan Inisialisasi Data ODP:
+
+# PILIHAN A (Direkomendasikan untuk Fresh Install):
+# Langsung isi 400+ master titik ODP hasil survei riil lengkap dengan koordinat GPS:
+php artisan db:seed --class=ProductionOdpSeeder --force
+
+# PILIHAN B (Jika ingin menarik data langsung dari database billing CI3 lokal):
+# Catatan: Di Debian 13, user 'root' tanpa password dilarang login via TCP.
+# Berikan akses database billing ke 'ticket_user', lalu update kredensial billing instance:
+# sudo mysql -e "GRANT ALL PRIVILEGES ON \`bill3-gyh\`.* TO 'ticket_user'@'localhost'; FLUSH PRIVILEGES;"
+# php artisan tinker --execute="App\Models\BillingInstance::where('tenant_code', 'BILL-001')->update(['db_username' => 'ticket_user', 'db_password' => 'PasswordSuperAman84!']);"
+# php artisan odp:sync
 ```
 
 ---

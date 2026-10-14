@@ -104,7 +104,7 @@
 
                 <!-- Remember Me Checkbox -->
                 <div class="flex items-center gap-2.5 select-none pt-1">
-                    <input type="checkbox" name="remember" id="rememberMe" class="neu-checkbox w-4 h-4 sm:w-4 sm:h-4">
+                    <input type="checkbox" name="remember" id="rememberMe" value="1" {{ old('remember') ? 'checked' : '' }} class="neu-checkbox w-4 h-4 sm:w-4 sm:h-4">
                     <label for="rememberMe" class="text-xs text-slate-600 dark:text-slate-400 font-medium cursor-pointer">
                         Ingat Saya
                     </label>
