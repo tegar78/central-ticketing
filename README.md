@@ -22,13 +22,16 @@ Aplikasi manajemen tiket gangguan terpusat (*Central Ticketing System*) yang ter
 
 Panduan lengkap telah disediakan pada direktori `docs/`:
 
-1. **[Panduan Instalasi Server Ubuntu & Debian](docs/PANDUAN_INSTALASI_UBUNTU_DEBIAN.md)**  
-   *Langkah-langkah lengkap instalasi dari fresh server: PHP 8.3, MariaDB/MySQL, Nginx, SSL Let's Encrypt, Supervisor Queue Worker, dan Cron Scheduler.*
+1. **[Panduan Instalasi Server Ubuntu 24/26 LTS](docs/TUTORIAL_INSTALL_UBUNTU_24_26.md)** (Tersedia juga di [TUTORIAL_INSTALL_UBUNTU_24_26.md](TUTORIAL_INSTALL_UBUNTU_24_26.md))  
+   *Panduan instalasi produksi untuk Ubuntu 24.04 & 26.04 LTS: PHP 8.4-FPM, MariaDB, Nginx, SSL Let's Encrypt, Supervisor Queue Worker, dan Cron Scheduler.*
 
-2. **[Panduan Integrasi REST API CodeIgniter 3 Billing](docs/CI3_REST_API_INTEGRATION_GUIDE.md)**  
+2. **[Panduan Instalasi Server Debian 13 (Trixie)](docs/TUTORIAL_INSTALL_DEBIAN_13.md)** (Tersedia juga di [TUTORIAL_INSTALL_DEBIAN_13.md](TUTORIAL_INSTALL_DEBIAN_13.md))  
+   *Panduan instalasi produksi untuk Debian 13 (Trixie): PHP 8.4-FPM (Ondřej Surý modern keyring deb822), MariaDB, Nginx, SSL Let's Encrypt, Supervisor, dan Cron Scheduler.*
+
+3. **[Panduan Integrasi REST API CodeIgniter 3 Billing](docs/CI3_REST_API_INTEGRATION_GUIDE.md)**  
    *Panduan teknis dan helper script untuk menghubungkan instansi billing lama berbasis CodeIgniter 3 ke sistem central-ticketing.*
 
-3. **[Panduan Koneksi & Setup Redis](docs/PANDUAN_KONEKSI_REDIS.md)**  
+4. **[Panduan Koneksi & Setup Redis](docs/PANDUAN_KONEKSI_REDIS.md)**  
    *Panduan instalasi Redis server, ekstensi phpredis, konfigurasi keamanan, isolasi database, serta pengalihan cache, antrean queue, dan sesi pengguna.*
 
 ---
@@ -36,7 +39,7 @@ Panduan lengkap telah disediakan pada direktori `docs/`:
 ## ⚡ Quick Start (Pengembangan Lokal)
 
 ### Prasyarat
-- PHP >= 8.3
+- PHP >= 8.4
 - Composer >= 2.x
 - Node.js >= 18.x & NPM
 - MySQL / MariaDB / SQLite
