@@ -159,16 +159,20 @@ if (!class_exists('CI_Controller')) {
  * 4. POST /central/send_ticket  -> Mengirim tiket gangguan dari CI3 ke Central
  * 5. POST /central/callback     -> Menerima pembaruan status tiket saat diselesaikan teknisi Central
  */
-class Central extends CI_Controller
-{
     // Konfigurasi Central Ticket System
-    private $central_url = 'https://central-ticketing.test/api/v1';
-    private $api_key     = 'key-bill-001-secret-12345'; // Sesuaikan dengan api_key billing Anda di Central
+    private $central_url = 'https://tiket.gayuh.net.id/api/v1'; // Sesuaikan dengan domain server Central Anda
+    private $api_key     = ''; // Diinisialisasi di __construct secara aman (Git-Safe)
 
     public function __construct()
     {
         parent::__construct();
         $this->load->database();
+
+        // Git-Safe: Ambil API key dari Environment Variable server / .env / application/config/central.php
+        $this->api_key = getenv('CENTRAL_API_KEY')
+            ?: (isset($_ENV['CENTRAL_API_KEY']) ? $_ENV['CENTRAL_API_KEY'] : null)
+            ?: (function_exists('config_item') ? config_item('central_api_key') : null)
+            ?: 'YOUR_CENTRAL_API_KEY';
     }
 
     /**

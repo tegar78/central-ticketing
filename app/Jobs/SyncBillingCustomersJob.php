@@ -25,10 +25,19 @@ class SyncBillingCustomersJob implements ShouldQueue
 
     public function handle(): void
     {
-        $params = [];
         if ($this->syncAll) {
-            $params['--all'] = true;
-        } elseif ($this->tenantCode) {
+            $instances = \App\Models\BillingInstance::where('is_active', true)->get();
+            Log::info("SyncBillingCustomersJob: Fanning out parallel sync jobs for {$instances->count()} active billing instances.");
+            foreach ($instances as $instance) {
+                if (!empty($instance->tenant_code)) {
+                    self::dispatch($instance->tenant_code, false);
+                }
+            }
+            return;
+        }
+
+        $params = [];
+        if ($this->tenantCode) {
             $params['tenant_code'] = $this->tenantCode;
         }
 

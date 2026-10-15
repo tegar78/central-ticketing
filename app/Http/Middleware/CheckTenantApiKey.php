@@ -36,16 +36,24 @@ class CheckTenantApiKey
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Cache lookup tenant ID by key hash to optimize performance
+        // Cache lookup tenant ID by key hash and optional tenant_code to support shared API keys
+        $tenantCode = $request->header('X-Tenant-Code') ?? $request->input('tenant_code');
         $keyHash = hash('sha256', (string) $apiKey);
-        $tenantId = Cache::remember("tenant_api_key_id:{$keyHash}", 3600, function () use ($apiKey) {
-            return BillingInstance::query()
+        $cacheKey = "tenant_api_key_id:{$keyHash}" . ($tenantCode ? ":{$tenantCode}" : '');
+
+        $tenantId = Cache::remember($cacheKey, 3600, function () use ($apiKey, $tenantCode) {
+            $query = BillingInstance::query()
                 ->where('is_active', true)
-                ->where(function ($query) use ($apiKey) {
-                    $query->where('api_key', hash('sha256', (string) $apiKey))
-                          ->orWhere('api_key', (string) $apiKey);
-                })
-                ->value('id');
+                ->where(function ($q) use ($apiKey) {
+                    $q->where('api_key', hash('sha256', (string) $apiKey))
+                      ->orWhere('api_key', (string) $apiKey);
+                });
+
+            if (!empty($tenantCode)) {
+                $query->where('tenant_code', strtoupper((string) $tenantCode));
+            }
+
+            return $query->value('id');
         });
 
         if (!$tenantId) {
