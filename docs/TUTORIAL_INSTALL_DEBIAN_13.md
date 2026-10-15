@@ -385,6 +385,9 @@ SESSION_LIFETIME=120
 SESSION_SECURE_COOKIE=true
 QUEUE_CONNECTION=database
 CACHE_STORE=database
+
+# SHARED API KEY BILLING GAYUH (Git-Safe, disimpan di .env server produksi)
+BILLING_SHARED_KEY=ganti_dengan_shared_key_rahasia_anda
 ```
 
 Simpan file (`Ctrl + O` -> `Enter` -> `Ctrl + X`).
@@ -436,6 +439,21 @@ php artisan db:seed --class=ProductionOdpSeeder --force
 # sudo mysql -e "GRANT ALL PRIVILEGES ON \`bill3-gyh\`.* TO 'ticket_user'@'localhost'; FLUSH PRIVILEGES;"
 # php artisan tinker --execute="App\Models\BillingInstance::where('tenant_code', 'BILL-001')->update(['db_username' => 'ticket_user', 'db_password' => 'PasswordSuperAman84!']);"
 # php artisan odp:sync
+
+# 4. Registrasi Massal 40 Billing Instance Gayuh (Bulk Register)
+# Mendaftarkan seluruh 40 domain billing Gayuh (BILL2 & BILL3) ke database secara instan
+# (Membaca BILLING_SHARED_KEY dari .env secara aman):
+php artisan billing:bulk-register
+
+# Periksa status seluruh billing instance yang berhasil didaftarkan:
+php artisan billing:list
+
+# 5. Sinkronisasi Data Pelanggan & Master ODP Seluruh Billing:
+# Tarik pelanggan dari seluruh 40 server billing via REST API:
+php artisan sync:billing-customers --all
+
+# Sinkronkan master titik ODP dari seluruh billing:
+php artisan odp:sync
 ```
 
 ---
@@ -588,11 +606,13 @@ autorestart=true
 stopasgroup=true
 killasgroup=true
 user=www-data
-numprocs=2
+numprocs=4
 redirect_stderr=true
 stdout_logfile=/var/www/central-ticketing/storage/logs/worker.log
 stopwaitsecs=3600
 ```
+
+> **Catatan Multi-Billing:** Disarankan menyetel `numprocs=4` agar proses antrean webhook pengiriman tiket dan sinkronisasi data dari 40 server billing CI3 dapat diproses secara paralel tanpa saling menunggu.
 
 Simpan file, kemudian terapkan ke Supervisor:
 
@@ -603,7 +623,7 @@ sudo supervisorctl start central-ticketing-worker:*
 sudo supervisorctl status
 ```
 
-*(Status harus menunjukkan `RUNNING` untuk kedua worker).*
+*(Status harus menunjukkan `RUNNING` untuk keempat worker).*
 
 ---
 
@@ -735,6 +755,35 @@ sudo supervisorctl restart central-ticketing-worker:*
 # 8. Matikan mode maintenance (website kembali online)
 php artisan up
 ```
+
+---
+
+## 22. Lampiran Khusus: Panduan Integrasi 40 Server Billing CodeIgniter 3 (Git-Safe)
+
+Agar API Key rahasia tidak bocor atau terlihat di repositori GitHub publik pada aplikasi CodeIgniter 3:
+
+### 1. Salin Controller Central ke Setiap Server CI3:
+Salin file `docs/Central.php` dari Central-Ticketing ke direktori aplikasi CI3 masing-masing:
+```text
+application/controllers/Central.php
+```
+
+### 2. Buat File Konfigurasi Rahasia di CI3 (Local Only):
+Buat file baru di `application/config/central.php` pada server CI3:
+```php
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+$config['central_url']     = 'https://tiket.perusahaan.net/api/v1'; // Domain server Central Anda
+$config['central_api_key'] = 'ganti_dengan_shared_key_rahasia_anda'; // Samakan dengan BILLING_SHARED_KEY di .env Central
+```
+
+### 3. Tambahkan ke .gitignore di Repositori CI3:
+Buka file `.gitignore` pada proyek CI3 Anda, lalu tambahkan baris berikut di baris paling akhir:
+```gitignore
+application/config/central.php
+```
+> **Keuntungan Keamanan:** File konfigurasi yang berisi API Key rahasia ini tidak akan pernah ter-commit atau ter-push ke GitHub!
 
 ---
 

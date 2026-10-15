@@ -54,11 +54,29 @@ Di CodeIgniter 3, Anda hanya perlu **1 file controller** saja:
 
 Setiap request dari CI3 ke Central Ticket System wajib menyertakan header:
 ```http
-X-API-KEY: key-bill-001-secret-12345
+X-API-KEY: [SHARED_KEY_RAHASIA_ANDA]
+X-Tenant-Code: BILL2-DSNET
 Accept: application/json
 Content-Type: application/json
 ```
-API Key ini diterbitkan dan dicocokkan dengan kolom `api_key` di tabel `billing_instances` Central.
+* **`X-API-KEY`**: Kunci API yang dicocokkan dengan kolom `api_key` di tabel `billing_instances` Central (atau nilai `BILLING_SHARED_KEY` di file `.env` Central).
+* **`X-Tenant-Code`** *(Opsional tapi sangat direkomendasikan jika memakai Shared Key)*: Kode unik tenant billing Anda (contoh: `BILL2-DSNET`, `BILL3-GYH`). Membantu Central mengidentifikasi cabang pengirim secara akurat.
+
+### 🔒 Praktik Terbaik Keamanan Git (Git-Safe):
+Agar API Key tidak bocor ke repositori GitHub publik:
+1. Buat file `application/config/central.php` di CI3:
+   ```php
+   <?php
+   defined('BASEPATH') OR exit('No direct script access allowed');
+   $config['central_url']      = 'https://tiket.perusahaan.com/api/v1';
+   $config['central_api_key']  = 'ganti_dengan_shared_key_rahasia_anda';
+   $config['central_tenant']   = 'BILL2-DSNET';
+   ```
+2. Tambahkan baris berikut ke `.gitignore` pada proyek CI3:
+   ```gitignore
+   application/config/central.php
+   ```
+3. Controller `Central.php` akan otomatis membaca konfigurasi tersebut via `config_item('central_api_key')`.
 
 ---
 
